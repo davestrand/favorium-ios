@@ -9,7 +9,7 @@
 import SwiftUI
 import SpriteKit
 
-/// Experimental magical crystal view with particles, swirls, and fluid effects
+/// Premium collectible crystal with decorative frames and subtle animations
 struct MagicalCrystalView: View {
     let model: CrystalModel
     let size: CGFloat
@@ -29,32 +29,29 @@ struct MagicalCrystalView: View {
     
     var body: some View {
         ZStack {
-            // Base magical glow (reduced)
+            // Subtle background glow
             Circle()
                 .fill(
                     RadialGradient(
                         colors: [
-                            primaryColor.opacity(0.4),
-                            secondaryColor.opacity(0.25),
+                            primaryColor.opacity(0.2),
                             Color.clear
                         ],
                         center: .center,
                         startRadius: 0,
-                        endRadius: size * 0.6
+                        endRadius: size * 0.5
                     )
                 )
-                .blur(radius: size * 0.12)
+                .blur(radius: size * 0.15)
             
-            // Particle system using SpriteKit (more subtle)
-            MagicalParticleScene(model: model, size: size)
-                .opacity(0.7)  // Reduce particle visibility
+            // Decorative frame (based on rarity tier)
+            DecorativeFrame(model: model, size: size)
             
-            // Swirling fluid layer (more subtle)
-            FluidSwirls(model: model, size: size)
-                .opacity(0.5)  // Reduce swirl visibility
-            
-            // Central gem core - THE STAR OF THE SHOW
+            // The precious gem - THE STAR OF THE SHOW
             MagicalGemCore(model: model, size: size, forcedSurfaceEffect: forcedSurfaceEffect)
+            
+            // Subtle shimmer overlay (gentle, not chaotic)
+            GentleShimmer(model: model, size: size)
         }
         .frame(width: size, height: size)
     }
@@ -98,9 +95,9 @@ struct MagicalGemCore: View {
     
     // Surface effect - deterministic based on model, or forced
     // Tiered system:
-    // - 5-29 transfers: Common effects
-    // - 30-49 transfers: Rare effects  
-    // - 50+ transfers: LEGENDARY effects
+    // - 5-29 transfers: Common effects (subtle)
+    // - 30-49 transfers: Rare effects (noticeable)
+    // - 50+ transfers: LEGENDARY effects (special)
     private var surfaceEffect: SurfaceEffect? {
         // Always show if forced (for preview/testing)
         if let forced = forcedSurfaceEffect {
@@ -117,18 +114,18 @@ struct MagicalGemCore: View {
         
         // Legendary effects for 50+ transfers
         if model.transferCount >= 50 {
-            let legendaryEffects: [SurfaceEffect] = [.constellation, .aurora, .nebula, .vortex]
+            let legendaryEffects: [SurfaceEffect] = [.constellation, .aurora, .prismatic]
             return legendaryEffects[hash % legendaryEffects.count]
         }
         
         // Rare effects for 30-49 transfers
         if model.transferCount >= 30 {
-            let rareEffects: [SurfaceEffect] = [.plasma, .prism, .celestial]
+            let rareEffects: [SurfaceEffect] = [.holographic, .rainbow, .pulse]
             return rareEffects[hash % rareEffects.count]
         }
         
         // Common effects for 5-29 transfers
-        let commonEffects: [SurfaceEffect] = [.lightning, .oilSheen, .opalescence, .shimmerWave, .dripping, .ripples, .metallic]
+        let commonEffects: [SurfaceEffect] = [.shimmer, .glow, .sparkle]
         return commonEffects[hash % commonEffects.count]
     }
     
@@ -504,764 +501,571 @@ struct MagicalGemCore: View {
     private var surfaceEffectView: some View {
         if let effect = surfaceEffect {
             switch effect {
-            // Common effects
-            case .lightning:
-                LightningEffect(gemShape: gemShape, size: size * 0.7, primaryColor: primaryColor)
+            // Common effects - Subtle
+            case .shimmer:
+                SubtleShimmerEffect(gemShape: gemShape, size: size * 0.7, rotation: rotation)
                     .frame(width: size * 0.7, height: size * 0.7)
-            case .oilSheen:
-                OilSheenEffect(gemShape: gemShape, size: size * 0.7, rotation: rotation)
+            case .glow:
+                SubtleGlowEffect(gemShape: gemShape, size: size * 0.7, primaryColor: primaryColor, pulse: pulse)
                     .frame(width: size * 0.7, height: size * 0.7)
-            case .opalescence:
-                OpalescenceEffect(gemShape: gemShape, size: size * 0.7, rotation: rotation)
-                    .frame(width: size * 0.7, height: size * 0.7)
-            case .shimmerWave:
-                ShimmerWaveEffect(gemShape: gemShape, size: size * 0.7, primaryColor: primaryColor, secondaryColor: secondaryColor)
-                    .frame(width: size * 0.7, height: size * 0.7)
-            case .dripping:
-                DrippingEffect(gemShape: gemShape, size: size * 0.7, primaryColor: primaryColor)
-                    .frame(width: size * 0.7, height: size * 0.7)
-            case .ripples:
-                RipplesEffect(gemShape: gemShape, size: size * 0.7, primaryColor: primaryColor)
-                    .frame(width: size * 0.7, height: size * 0.7)
-            case .metallic:
-                MetallicEffect(gemShape: gemShape, size: size * 0.7, primaryColor: primaryColor, rotation: rotation)
+            case .sparkle:
+                SubtleSparkleEffect(gemShape: gemShape, size: size * 0.7, primaryColor: primaryColor)
                     .frame(width: size * 0.7, height: size * 0.7)
                 
-            // Rare effects
-            case .plasma:
-                PlasmaEffect(gemShape: gemShape, size: size * 0.7, primaryColor: primaryColor, secondaryColor: secondaryColor)
+            // Rare effects - More noticeable
+            case .holographic:
+                HolographicEffect(gemShape: gemShape, size: size * 0.7, rotation: rotation)
                     .frame(width: size * 0.7, height: size * 0.7)
-            case .prism:
-                PrismEffect(gemShape: gemShape, size: size * 0.7, rotation: rotation)
+            case .rainbow:
+                RainbowEffect(gemShape: gemShape, size: size * 0.7, rotation: rotation)
                     .frame(width: size * 0.7, height: size * 0.7)
-            case .celestial:
-                CelestialEffect(gemShape: gemShape, size: size * 0.7, primaryColor: primaryColor)
+            case .pulse:
+                PulseEffect(gemShape: gemShape, size: size * 0.7, primaryColor: primaryColor, secondaryColor: secondaryColor)
                     .frame(width: size * 0.7, height: size * 0.7)
                 
-            // Legendary effects
+            // Legendary effects - Special but classy
             case .constellation:
                 ConstellationEffect(gemShape: gemShape, size: size * 0.7, primaryColor: primaryColor)
                     .frame(width: size * 0.7, height: size * 0.7)
             case .aurora:
-                AuroraEffect(gemShape: gemShape, size: size * 0.7, primaryColor: primaryColor, secondaryColor: secondaryColor)
+                CleanAuroraEffect(gemShape: gemShape, size: size * 0.7, primaryColor: primaryColor, secondaryColor: secondaryColor)
                     .frame(width: size * 0.7, height: size * 0.7)
-            case .nebula:
-                NebulaEffect(gemShape: gemShape, size: size * 0.7, primaryColor: primaryColor, secondaryColor: secondaryColor)
-                    .frame(width: size * 0.7, height: size * 0.7)
-            case .vortex:
-                VortexEffect(gemShape: gemShape, size: size * 0.7, primaryColor: primaryColor, secondaryColor: secondaryColor)
+            case .prismatic:
+                PrismaticEffect(gemShape: gemShape, size: size * 0.7, rotation: rotation)
                     .frame(width: size * 0.7, height: size * 0.7)
             }
         }
     }
 }
 
-// MARK: - Surface Effect Types
+// MARK: - Surface Effect Types (Now Subtle)
 
 enum SurfaceEffect: String, CaseIterable {
-    // Common effects (5-29 transfers)
-    case lightning = "Lightning"
-    case oilSheen = "Oil Sheen"
-    case opalescence = "Opalescence"
-    case shimmerWave = "Shimmer Wave"
-    case dripping = "Dripping"
-    case ripples = "Ripples"
-    case metallic = "Metallic"
+    // Common effects (5-29 transfers) - Subtle enhancements
+    case shimmer = "Shimmer"
+    case glow = "Glow"
+    case sparkle = "Sparkle"
     
-    // Rare effects (30-49 transfers)
-    case plasma = "Plasma"
-    case prism = "Prism"
-    case celestial = "Celestial"
+    // Rare effects (30-49 transfers) - More noticeable but still classy
+    case holographic = "Holographic"
+    case rainbow = "Rainbow"
+    case pulse = "Pulse"
     
-    // Legendary effects (50+ transfers)
-    case constellation = "Constellation"
+    // Legendary effects (50+ transfers) - Special but not overwhelming
     case aurora = "Aurora"
-    case nebula = "Nebula"
-    case vortex = "Vortex"
-    
-    // TODO: Future surface effects to implement
-    // - flames = "Flames" - Flickering flames dancing across the surface
-    // - web = "Web" - Animated geometric patterns or crystalline webs
+    case constellation = "Constellation"
+    case prismatic = "Prismatic"
 }
 
-// MARK: - Surface Effect Views
+// MARK: - Decorative Frames (Rarity Tiers)
 
-struct LightningEffect: View {
-    let gemShape: AnyShape
+/// Decorative frame around the gem - gets more ornate with higher transfer counts
+struct DecorativeFrame: View {
+    let model: CrystalModel
     let size: CGFloat
-    let primaryColor: Color
     
-    @State private var boltPhase: Double = 0
-    @State private var intensity: Double = 0
+    @State private var rotation: Double = 0
+    
+    private var frameColor: Color {
+        // Frame color based on tier
+        if model.transferCount >= 50 {
+            return Color(hue: 0.15, saturation: 0.8, brightness: 1.0) // Gold
+        } else if model.transferCount >= 30 {
+            return Color(hue: 0.0, saturation: 0.0, brightness: 0.8) // Silver
+        } else if model.transferCount >= 5 {
+            return Color(hue: 0.08, saturation: 0.6, brightness: 0.7) // Bronze
+        }
+        return Color.clear
+    }
     
     var body: some View {
-        TimelineView(.animation(minimumInterval: 0.016)) { timeline in
-            Canvas { context, canvasSize in
-                let time = timeline.date.timeIntervalSinceReferenceDate
+        ZStack {
+            if model.transferCount >= 50 {
+                // LEGENDARY - Wings and elaborate decorations
+                legendaryFrame
+            } else if model.transferCount >= 30 {
+                // RARE - Ornate frame with details
+                rareFrame
+            } else if model.transferCount >= 5 {
+                // COMMON - Simple elegant border
+                commonFrame
+            }
+        }
+        .onAppear {
+            withAnimation(.linear(duration: 40).repeatForever(autoreverses: false)) {
+                rotation = 360
+            }
+        }
+    }
+    
+    private var commonFrame: some View {
+        ZStack {
+            // Simple thin border
+            Circle()
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            frameColor.opacity(0.6),
+                            frameColor.opacity(0.3),
+                            frameColor.opacity(0.6)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 2
+                )
+                .frame(width: size * 0.8, height: size * 0.8)
+            
+            // Subtle glow
+            Circle()
+                .stroke(frameColor.opacity(0.2), lineWidth: 1)
+                .frame(width: size * 0.8, height: size * 0.8)
+                .blur(radius: 3)
+        }
+    }
+    
+    private var rareFrame: some View {
+        ZStack {
+            // Ornate border with pattern
+            Circle()
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            frameColor,
+                            frameColor.opacity(0.7),
+                            frameColor,
+                            frameColor.opacity(0.7),
+                            frameColor
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 3
+                )
+                .frame(width: size * 0.82, height: size * 0.82)
+            
+            // Inner decorative ring
+            Circle()
+                .stroke(frameColor.opacity(0.4), lineWidth: 1)
+                .frame(width: size * 0.77, height: size * 0.77)
+            
+            // Decorative dots around the circle
+            ForEach(0..<12, id: \.self) { i in
+                let angle = Double(i) * 30.0 * .pi / 180
+                let radius = size * 0.42
                 
-                // Draw occasional bolts that crawl across the surface
-                for i in 0..<3 {
-                    let seed = Double(i) * 1.234
-                    let offset = Double(i) * 2.5  // Stagger the bolts more
-                    let boltTime = time * 0.5 + offset  // Slower movement
-                    
-                    // Each bolt appears and fades periodically
-                    let cycleTime = (boltTime).truncatingRemainder(dividingBy: 4.0)
-                    
-                    // Only visible for part of the cycle
-                    let isVisible = cycleTime < 1.5  // Visible for 1.5s out of every 4s
-                    
-                    if isVisible {
-                        let path = createLightningBolt(size: canvasSize, seed: seed, phase: boltTime)
-                        
-                        // Fade in and out smoothly
-                        let fadeProgress = min(cycleTime / 0.3, (1.5 - cycleTime) / 0.3)
-                        let baseOpacity = min(1.0, fadeProgress)
-                        
-                        // Subtle flickering
-                        let flicker = 0.7 + abs(sin(boltTime * 12.0 + seed)) * 0.3
-                        let opacity = baseOpacity * flicker
-                        
-                        // Bright white core
-                        context.stroke(
-                            path,
-                            with: .color(Color.white.opacity(opacity * 0.9)),
-                            lineWidth: 2.0
-                        )
-                        
-                        // Colored glow
-                        context.stroke(
-                            path,
-                            with: .color(primaryColor.opacity(opacity * 0.6)),
-                            lineWidth: 4.5
-                        )
-                    }
-                }
-            }
-        }
-        .mask(gemShape.frame(width: size, height: size))
-        .blendMode(.screen)
-    }
-    
-    private func createLightningBolt(size: CGSize, seed: Double, phase: Double) -> Path {
-        var path = Path()
-        
-        // Random start and end points
-        let startX = size.width * (0.2 + sin(seed) * 0.3)
-        let startY = size.height * (0.1 + cos(seed * 1.3) * 0.2)
-        let endX = size.width * (0.5 + sin(seed * 2.1 + phase) * 0.4)
-        let endY = size.height * (0.6 + cos(seed * 1.7 + phase) * 0.3)
-        
-        // Generate main bolt with jagged segments
-        var segments: [(CGPoint, CGPoint)] = []
-        let mainBolt = generateBoltSegments(
-            from: CGPoint(x: startX, y: startY),
-            to: CGPoint(x: endX, y: endY),
-            displacement: size.width * 0.15,
-            seed: seed + phase
-        )
-        
-        // Draw main bolt
-        if let first = mainBolt.first {
-            path.move(to: first)
-        }
-        for point in mainBolt.dropFirst() {
-            path.addLine(to: point)
-        }
-        
-        // Add branches (forked lightning)
-        if mainBolt.count > 3 {
-            // Branch from a middle point
-            let branchIndex = Int(mainBolt.count / 2)
-            let branchStart = mainBolt[branchIndex]
-            
-            // Branch direction (perpendicular-ish to main bolt)
-            let branchEndX = branchStart.x + cos(seed * 3 + phase) * size.width * 0.3
-            let branchEndY = branchStart.y + sin(seed * 2 + phase) * size.height * 0.2
-            
-            let branch = generateBoltSegments(
-                from: branchStart,
-                to: CGPoint(x: branchEndX, y: branchEndY),
-                displacement: size.width * 0.08,
-                seed: seed + phase + 100
-            )
-            
-            path.move(to: branchStart)
-            for point in branch.dropFirst() {
-                path.addLine(to: point)
-            }
-        }
-        
-        return path
-    }
-    
-    // Recursive function to create jagged lightning segments
-    private func generateBoltSegments(from start: CGPoint, to end: CGPoint, displacement: CGFloat, seed: Double) -> [CGPoint] {
-        // Base case: if displacement is too small, just draw a line
-        if displacement < 2 {
-            return [start, end]
-        }
-        
-        // Find midpoint
-        let midX = (start.x + end.x) / 2
-        let midY = (start.y + end.y) / 2
-        
-        // Perpendicular offset for jaggedness
-        let dx = end.x - start.x
-        let dy = end.y - start.y
-        let length = sqrt(dx * dx + dy * dy)
-        
-        // Perpendicular vector
-        let perpX = -dy / length
-        let perpY = dx / length
-        
-        // Random offset using seed for consistency
-        let randomOffset = (sin(seed + midX + midY) * 2 - 1) * displacement
-        
-        let offsetMid = CGPoint(
-            x: midX + perpX * randomOffset,
-            y: midY + perpY * randomOffset
-        )
-        
-        // Recursively generate left and right segments
-        let leftSegments = generateBoltSegments(
-            from: start,
-            to: offsetMid,
-            displacement: displacement * 0.6,
-            seed: seed * 1.3
-        )
-        
-        let rightSegments = generateBoltSegments(
-            from: offsetMid,
-            to: end,
-            displacement: displacement * 0.6,
-            seed: seed * 1.7
-        )
-        
-        // Combine segments (skip first point of right to avoid duplication)
-        return leftSegments + rightSegments.dropFirst()
-    }
-}
-
-struct OilSheenEffect: View {
-    let gemShape: AnyShape
-    let size: CGFloat
-    let rotation: Double
-    
-    var body: some View {
-        ZStack {
-            // Fast-rotating rainbow
-            gemShape
-                .fill(
-                    AngularGradient(
-                        gradient: Gradient(colors: [
-                            Color(hue: 0.0, saturation: 1.0, brightness: 1.0),
-                            Color(hue: 0.1, saturation: 1.0, brightness: 1.0),
-                            Color(hue: 0.2, saturation: 1.0, brightness: 1.0),
-                            Color(hue: 0.3, saturation: 1.0, brightness: 1.0),
-                            Color(hue: 0.4, saturation: 1.0, brightness: 1.0),
-                            Color(hue: 0.5, saturation: 1.0, brightness: 1.0),
-                            Color(hue: 0.6, saturation: 1.0, brightness: 1.0),
-                            Color(hue: 0.7, saturation: 1.0, brightness: 1.0),
-                            Color(hue: 0.8, saturation: 1.0, brightness: 1.0),
-                            Color(hue: 0.9, saturation: 1.0, brightness: 1.0),
-                            Color(hue: 1.0, saturation: 1.0, brightness: 1.0),
-                            Color(hue: 0.0, saturation: 1.0, brightness: 1.0)
-                        ]),
-                        center: .center,
-                        angle: .degrees(rotation * 3)  // Faster rotation (was * 2)
+                Circle()
+                    .fill(frameColor)
+                    .frame(width: 4, height: 4)
+                    .offset(
+                        x: cos(angle) * radius,
+                        y: sin(angle) * radius
                     )
-                )
-                .frame(width: size, height: size)
+                    .shadow(color: frameColor.opacity(0.5), radius: 2)
+            }
             
-            // Counter-rotating layer for more shimmer
-            gemShape
-                .fill(
-                    AngularGradient(
-                        gradient: Gradient(colors: [
-                            Color.white.opacity(0.8),
-                            Color.clear,
-                            Color.white.opacity(0.8),
-                            Color.clear,
-                            Color.white.opacity(0.8),
-                            Color.clear
-                        ]),
-                        center: .center,
-                        angle: .degrees(-rotation * 2)
-                    )
-                )
-                .frame(width: size, height: size)
-                .blendMode(.overlay)
+            // Glow
+            Circle()
+                .stroke(frameColor.opacity(0.3), lineWidth: 4)
+                .frame(width: size * 0.82, height: size * 0.82)
+                .blur(radius: 4)
         }
-        .opacity(0.5)
-        .blendMode(.screen)
     }
-}
-
-struct OpalescenceEffect: View {
-    let gemShape: AnyShape
-    let size: CGFloat
-    let rotation: Double
     
-    var body: some View {
+    private var legendaryFrame: some View {
         ZStack {
-            ForEach(0..<6, id: \.self) { i in
-                let hue = Double(i) / 6.0
-                let angle = (rotation + Double(i) * 60) * .pi / 180
+            // Wings/Rays extending outward
+            ForEach(0..<8, id: \.self) { i in
+                let angle = Double(i) * 45.0
+                
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                frameColor,
+                                frameColor.opacity(0.7),
+                                frameColor.opacity(0.3),
+                                Color.clear
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: size * 0.25, height: 4)
+                    .offset(x: size * 0.3)
+                    .rotationEffect(.degrees(angle + rotation * 0.1))
+                    .shadow(color: frameColor.opacity(0.5), radius: 4)
+            }
+            
+            // Elaborate border - double ring
+            Circle()
+                .stroke(
+                    AngularGradient(
+                        colors: [
+                            frameColor,
+                            frameColor.opacity(0.6),
+                            frameColor,
+                            frameColor.opacity(0.6),
+                            frameColor
+                        ],
+                        center: .center
+                    ),
+                    lineWidth: 4
+                )
+                .frame(width: size * 0.85, height: size * 0.85)
+            
+            Circle()
+                .stroke(frameColor.opacity(0.5), lineWidth: 2)
+                .frame(width: size * 0.78, height: size * 0.78)
+            
+            // Decorative gems/jewels on the frame
+            ForEach(0..<16, id: \.self) { i in
+                let angle = Double(i) * 22.5 * .pi / 180
+                let radius = size * 0.44
+                let isLarge = i % 4 == 0
                 
                 Circle()
                     .fill(
                         RadialGradient(
                             colors: [
-                                Color(hue: hue, saturation: 0.9, brightness: 1.0).opacity(0.7),
-                                Color(hue: hue, saturation: 0.8, brightness: 1.0).opacity(0.4),
-                                Color.clear
+                                Color.white,
+                                frameColor,
+                                frameColor.opacity(0.7)
                             ],
                             center: .center,
                             startRadius: 0,
-                            endRadius: size * 0.35
+                            endRadius: isLarge ? 4 : 2
                         )
                     )
-                    .frame(width: size * 0.7, height: size * 0.7)
+                    .frame(width: isLarge ? 6 : 3, height: isLarge ? 6 : 3)
                     .offset(
-                        x: cos(angle) * size * 0.2,
-                        y: sin(angle) * size * 0.2
+                        x: cos(angle) * radius,
+                        y: sin(angle) * radius
                     )
+                    .shadow(color: frameColor.opacity(0.8), radius: 3)
             }
+            
+            // Powerful glow
+            Circle()
+                .stroke(frameColor.opacity(0.4), lineWidth: 6)
+                .frame(width: size * 0.85, height: size * 0.85)
+                .blur(radius: 8)
         }
-        .frame(width: size, height: size)
-        .mask(
-            gemShape
-                .frame(width: size, height: size)
-        )
-        .blendMode(.screen)
-        .opacity(0.7)
     }
 }
 
-struct ShimmerWaveEffect: View {
+// MARK: - Gentle Shimmer Overlay
+
+/// Subtle shimmer that sweeps across the gem periodically
+struct GentleShimmer: View {
+    let model: CrystalModel
+    let size: CGFloat
+    
+    @State private var shimmerPhase: Double = 0
+    
+    var body: some View {
+        ZStack {
+            // Gentle diagonal shine that sweeps across
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        stops: [
+                            .init(color: Color.clear, location: 0),
+                            .init(color: Color.white.opacity(0.15), location: 0.45),
+                            .init(color: Color.white.opacity(0.3), location: 0.5),
+                            .init(color: Color.white.opacity(0.15), location: 0.55),
+                            .init(color: Color.clear, location: 1.0)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(width: size * 2, height: size)
+                .rotationEffect(.degrees(-30))
+                .offset(x: (shimmerPhase - 0.5) * size * 3)
+                .mask(Circle().frame(width: size * 0.75, height: size * 0.75))
+                .blendMode(.overlay)
+        }
+        .onAppear {
+            // Slow periodic shimmer
+            withAnimation(.easeInOut(duration: 3.5).repeatForever(autoreverses: false)) {
+                shimmerPhase = 1.0
+            }
+        }
+    }
+}
+
+// MARK: - COMMON SURFACE EFFECTS (Subtle)
+
+struct SubtleShimmerEffect: View {
+    let gemShape: AnyShape
+    let size: CGFloat
+    let rotation: Double
+    
+    var body: some View {
+        gemShape
+            .fill(
+                AngularGradient(
+                    gradient: Gradient(colors: [
+                        Color.white.opacity(0.3),
+                        Color.clear,
+                        Color.white.opacity(0.2),
+                        Color.clear,
+                        Color.white.opacity(0.3),
+                        Color.clear
+                    ]),
+                    center: .center,
+                    angle: .degrees(rotation * 0.5)
+                )
+            )
+            .frame(width: size, height: size)
+            .blendMode(.overlay)
+            .opacity(0.6)
+    }
+}
+
+struct SubtleGlowEffect: View {
+    let gemShape: AnyShape
+    let size: CGFloat
+    let primaryColor: Color
+    let pulse: Double
+    
+    var body: some View {
+        gemShape
+            .fill(
+                RadialGradient(
+                    colors: [
+                        primaryColor.opacity(0.3 * pulse),
+                        primaryColor.opacity(0.1 * pulse),
+                        Color.clear
+                    ],
+                    center: .center,
+                    startRadius: 0,
+                    endRadius: size * 0.5
+                )
+            )
+            .frame(width: size, height: size)
+            .blur(radius: 8)
+            .blendMode(.screen)
+    }
+}
+
+struct SubtleSparkleEffect: View {
+    let gemShape: AnyShape
+    let size: CGFloat
+    let primaryColor: Color
+    
+    @State private var sparklePhase: Double = 0
+    
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 0.1)) { timeline in
+            Canvas { context, canvasSize in
+                let time = timeline.date.timeIntervalSinceReferenceDate
+                
+                // Just a few gentle sparkles
+                for i in 0..<6 {
+                    let seed = Double(i) * 123.456
+                    let twinkle = abs(sin(time * 1.5 + seed))
+                    
+                    if twinkle > 0.7 {
+                        let angle = seed * 2
+                        let distance = sin(seed) * canvasSize.width * 0.3
+                        let x = canvasSize.width / 2 + cos(angle) * distance
+                        let y = canvasSize.height / 2 + sin(angle) * distance
+                        
+                        // Small cross sparkle
+                        let length: CGFloat = 6
+                        var path = Path()
+                        path.move(to: CGPoint(x: x, y: y - length))
+                        path.addLine(to: CGPoint(x: x, y: y + length))
+                        path.move(to: CGPoint(x: x - length, y: y))
+                        path.addLine(to: CGPoint(x: x + length, y: y))
+                        
+                        context.stroke(
+                            path,
+                            with: .color(Color.white.opacity(twinkle)),
+                            lineWidth: 1.5
+                        )
+                    }
+                }
+            }
+        }
+        .mask(gemShape.frame(width: size, height: size))
+        .blendMode(.screen)
+    }
+}
+
+// MARK: - RARE SURFACE EFFECTS (More Noticeable)
+
+struct HolographicEffect: View {
+    let gemShape: AnyShape
+    let size: CGFloat
+    let rotation: Double
+    
+    var body: some View {
+        gemShape
+            .fill(
+                AngularGradient(
+                    gradient: Gradient(colors: [
+                        Color(hue: 0.0, saturation: 0.8, brightness: 1.0).opacity(0.3),
+                        Color(hue: 0.15, saturation: 0.8, brightness: 1.0).opacity(0.3),
+                        Color(hue: 0.3, saturation: 0.8, brightness: 1.0).opacity(0.3),
+                        Color(hue: 0.5, saturation: 0.8, brightness: 1.0).opacity(0.3),
+                        Color(hue: 0.65, saturation: 0.8, brightness: 1.0).opacity(0.3),
+                        Color(hue: 0.8, saturation: 0.8, brightness: 1.0).opacity(0.3),
+                        Color(hue: 1.0, saturation: 0.8, brightness: 1.0).opacity(0.3)
+                    ]),
+                    center: .center,
+                    angle: .degrees(rotation * 2)
+                )
+            )
+            .frame(width: size, height: size)
+            .blendMode(.screen)
+            .opacity(0.7)
+    }
+}
+
+struct RainbowEffect: View {
+    let gemShape: AnyShape
+    let size: CGFloat
+    let rotation: Double
+    
+    var body: some View {
+        ZStack {
+            ForEach(0..<7, id: \.self) { i in
+                let hue = Double(i) / 7.0
+                let offset = Double(i) * size * 0.05
+                
+                gemShape
+                    .stroke(
+                        Color(hue: hue, saturation: 0.8, brightness: 1.0).opacity(0.4),
+                        lineWidth: 2
+                    )
+                    .frame(width: size - offset, height: size - offset)
+            }
+        }
+        .rotationEffect(.degrees(rotation * 0.3))
+        .blendMode(.screen)
+        .opacity(0.6)
+    }
+}
+
+struct PulseEffect: View {
     let gemShape: AnyShape
     let size: CGFloat
     let primaryColor: Color
     let secondaryColor: Color
     
-    @State private var wavePhase: Double = 0
+    @State private var pulsePhase: Double = 0
     
     var body: some View {
         ZStack {
-            // Multiple waves sweeping across at different speeds
-            ForEach(0..<4, id: \.self) { i in
-                let offset = Double(i) * 0.25
-                let currentPhase = (wavePhase + offset).truncatingRemainder(dividingBy: 1.0)
+            gemShape
+                .fill(primaryColor.opacity(0.2 * pulsePhase))
+                .frame(width: size, height: size)
+                .blur(radius: 4)
+            
+            gemShape
+                .fill(secondaryColor.opacity(0.2 * (1 - pulsePhase)))
+                .frame(width: size, height: size)
+                .blur(radius: 4)
+        }
+        .blendMode(.screen)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                pulsePhase = 1.0
+            }
+        }
+    }
+}
+
+// MARK: - LEGENDARY SURFACE EFFECTS (Special but Classy)
+
+struct CleanAuroraEffect: View {
+    let gemShape: AnyShape
+    let size: CGFloat
+    let primaryColor: Color
+    let secondaryColor: Color
+    
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 0.05)) { timeline in
+            Canvas { context, canvasSize in
+                let time = timeline.date.timeIntervalSinceReferenceDate
                 
-                Rectangle()
-                    .fill(
-                        LinearGradient(
-                            stops: [
-                                .init(color: Color.clear, location: 0),
-                                .init(color: primaryColor.opacity(0.3), location: 0.3),
-                                .init(color: Color.white.opacity(0.9), location: 0.5),
-                                .init(color: secondaryColor.opacity(0.3), location: 0.7),
-                                .init(color: Color.clear, location: 1.0)
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
+                // Just 2-3 gentle flowing waves
+                for wave in 0..<3 {
+                    let waveOffset = Double(wave) * 0.33
+                    let waveTime = time * 0.4 + waveOffset
+                    
+                    var path = Path()
+                    let segments = 20
+                    
+                    for i in 0...segments {
+                        let t = Double(i) / Double(segments)
+                        let x = canvasSize.width * t
+                        let y = canvasSize.height * 0.5 + 
+                                sin(t * .pi * 2 + waveTime) * canvasSize.height * 0.15
+                        
+                        if i == 0 {
+                            path.move(to: CGPoint(x: x, y: y))
+                        } else {
+                            path.addLine(to: CGPoint(x: x, y: y))
+                        }
+                    }
+                    
+                    let waveColor = wave % 2 == 0 ? primaryColor : secondaryColor
+                    
+                    context.stroke(
+                        path,
+                        with: .color(waveColor.opacity(0.4)),
+                        lineWidth: 8
                     )
-                    .frame(width: size * 1.5, height: size)
-                    .rotationEffect(.degrees(Double(i) * 20 - 30))  // Varied angles
-                    .offset(x: (currentPhase - 0.5) * size * 3)
+                    context.stroke(
+                        path,
+                        with: .color(Color.white.opacity(0.3)),
+                        lineWidth: 2
+                    )
+                }
             }
         }
         .frame(width: size, height: size)
-        .mask(
-            gemShape
-                .frame(width: size, height: size)
-        )
-        .blendMode(.screen)
-        .onAppear {
-            withAnimation(.linear(duration: 2.5).repeatForever(autoreverses: false)) {
-                wavePhase = 1.0
-            }
-        }
-    }
-}
-
-struct DrippingEffect: View {
-    let gemShape: AnyShape
-    let size: CGFloat
-    let primaryColor: Color
-    
-    @State private var dripPhase: Double = 0
-    
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 0.016)) { timeline in
-            Canvas { context, canvasSize in
-                let time = timeline.date.timeIntervalSinceReferenceDate
-                
-                for i in 0..<5 {
-                    let seed = Double(i) * 0.789
-                    let x = canvasSize.width * (0.2 + Double(i) * 0.15)
-                    
-                    // Each drip has its own cycle
-                    let dripTime = (time * 0.4 + seed * 2.0).truncatingRemainder(dividingBy: 3.0)
-                    
-                    // Drip grows from top, then falls and disappears
-                    let growPhase = min(dripTime / 0.8, 1.0)  // Grows for 0.8s
-                    let fallPhase = max(0, (dripTime - 0.8) / 2.2)  // Falls for remaining 2.2s
-                    
-                    if dripTime < 3.0 {
-                        let maxLength = canvasSize.height * 0.6
-                        let currentLength = maxLength * growPhase
-                        let fallDistance = canvasSize.height * 0.4 * fallPhase
-                        
-                        // Start position moves down as it falls
-                        let startY = fallDistance
-                        let endY = startY + currentLength
-                        
-                        // Drip trail
-                        var path = Path()
-                        path.move(to: CGPoint(x: x, y: startY))
-                        
-                        let controlX = x + sin(time * 2 + seed) * 4
-                        path.addQuadCurve(
-                            to: CGPoint(x: x, y: endY),
-                            control: CGPoint(x: controlX, y: (startY + endY) * 0.5)
-                        )
-                        
-                        // Drip bulb at the end
-                        let bulbSize = 5 + sin(time * 3 + seed) * 2
-                        let bulbPath = Path(ellipseIn: CGRect(
-                            x: x - bulbSize / 2,
-                            y: endY - bulbSize / 2,
-                            width: bulbSize,
-                            height: bulbSize * 1.4
-                        ))
-                        
-                        // Fade out as it falls off screen
-                        let fadeOut = endY > canvasSize.height * 0.9 ? 
-                            max(0, 1.0 - (endY - canvasSize.height * 0.9) / (canvasSize.height * 0.1)) : 1.0
-                        
-                        // Draw trail
-                        context.stroke(
-                            path, 
-                            with: .color(primaryColor.opacity(0.5 * fadeOut)), 
-                            lineWidth: 2.5
-                        )
-                        
-                        // Draw bulb
-                        context.fill(
-                            bulbPath, 
-                            with: .color(primaryColor.opacity(0.7 * fadeOut))
-                        )
-                        
-                        // Highlight on bulb
-                        let highlightPath = Path(ellipseIn: CGRect(
-                            x: x - bulbSize / 4,
-                            y: endY - bulbSize / 3,
-                            width: bulbSize / 2,
-                            height: bulbSize / 2
-                        ))
-                        context.fill(
-                            highlightPath, 
-                            with: .color(Color.white.opacity(0.5 * fadeOut))
-                        )
-                    }
-                }
-            }
-        }
         .mask(gemShape.frame(width: size, height: size))
         .blendMode(.screen)
+        .blur(radius: 2)
     }
 }
 
-struct RipplesEffect: View {
+struct PrismaticEffect: View {
     let gemShape: AnyShape
     let size: CGFloat
-    let primaryColor: Color
-    
-    @State private var ripplePhase: Double = 0
-    
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 0.05)) { timeline in
-            Canvas { context, canvasSize in
-                let time = timeline.date.timeIntervalSinceReferenceDate
-                
-                // Create multiple ripple sources that trigger at different times
-                let rippleSources = 5
-                
-                for source in 0..<rippleSources {
-                    let seed = Double(source) * 123.456
-                    
-                    // Each source triggers ripples periodically
-                    let cycleTime = (time * 0.3 + seed * 2.0).truncatingRemainder(dividingBy: 4.0)
-                    
-                    // Random position for this ripple source
-                    let sourceX = canvasSize.width * (0.3 + sin(seed) * 0.4)
-                    let sourceY = canvasSize.height * (0.3 + cos(seed * 1.3) * 0.4)
-                    
-                    // Create expanding ripples from this source
-                    if cycleTime < 3.0 {
-                        // Draw 3-4 concentric ripples expanding outward
-                        for ripple in 0..<4 {
-                            let rippleDelay = Double(ripple) * 0.4
-                            let rippleTime = cycleTime - rippleDelay
-                            
-                            if rippleTime > 0 {
-                                // Ripple radius grows over time
-                                let maxRadius = min(canvasSize.width, canvasSize.height) * 0.6
-                                let radius = rippleTime / 3.0 * maxRadius
-                                
-                                // Fade out as ripple expands
-                                let fadeOut = max(0, 1.0 - rippleTime / 3.0)
-                                
-                                // Ripple ring
-                                let ripplePath = Path(ellipseIn: CGRect(
-                                    x: sourceX - radius,
-                                    y: sourceY - radius,
-                                    width: radius * 2,
-                                    height: radius * 2
-                                ))
-                                
-                                // Draw ripple with glow
-                                context.stroke(
-                                    ripplePath,
-                                    with: .color(Color.white.opacity(0.6 * fadeOut)),
-                                    lineWidth: 2.0
-                                )
-                                context.stroke(
-                                    ripplePath,
-                                    with: .color(primaryColor.opacity(0.4 * fadeOut)),
-                                    lineWidth: 4.0
-                                )
-                                
-                                // Inner highlight
-                                if ripple == 0 {
-                                    context.stroke(
-                                        ripplePath,
-                                        with: .color(primaryColor.opacity(0.2 * fadeOut)),
-                                        lineWidth: 8.0
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        .mask(gemShape.frame(width: size, height: size))
-        .blendMode(.screen)
-    }
-}
-
-struct FrostEffect: View {
-    let gemShape: AnyShape
-    let size: CGFloat
-    
-    @State private var growthPhase: Double = 0
-    
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 0.05)) { timeline in
-            Canvas { context, canvasSize in
-                let time = timeline.date.timeIntervalSinceReferenceDate
-                
-                // Cycle: 3s freeze, 2s frozen, 3s thaw, 2s clear
-                let cycleTime = time.truncatingRemainder(dividingBy: 10.0)
-                
-                // Calculate frost coverage (0 = clear, 1 = fully frozen)
-                let frostCoverage: Double
-                if cycleTime < 3.0 {
-                    // Freezing phase - frost grows
-                    frostCoverage = min(1.0, cycleTime / 3.0)
-                } else if cycleTime < 5.0 {
-                    // Fully frozen phase
-                    frostCoverage = 1.0
-                } else if cycleTime < 8.0 {
-                    // Thawing phase - frost melts
-                    frostCoverage = max(0.0, 1.0 - (cycleTime - 5.0) / 3.0)
-                } else {
-                    // Clear phase
-                    frostCoverage = 0.0
-                }
-                
-                if frostCoverage > 0 {
-                    // Ice overlay - gets more opaque as frost grows
-                    let icePath = Path(ellipseIn: CGRect(
-                        origin: .zero,
-                        size: canvasSize
-                    ))
-                    
-                    // Frost base layer
-                    context.fill(
-                        icePath,
-                        with: .color(Color.white.opacity(0.15 * frostCoverage))
-                    )
-                    context.fill(
-                        icePath,
-                        with: .color(Color.cyan.opacity(0.08 * frostCoverage))
-                    )
-                    
-                    // Frost crystals growing from edges toward center
-                    let crystalCount = 60
-                    for i in 0..<crystalCount {
-                        let seed = Double(i) * 123.456
-                        let angleSeed = seed * 2.0
-                        
-                        // Crystals grow from edge inward
-                        let edgeAngle = angleSeed
-                        let edgeX = canvasSize.width * 0.5 + cos(edgeAngle) * canvasSize.width * 0.5
-                        let edgeY = canvasSize.height * 0.5 + sin(edgeAngle) * canvasSize.height * 0.5
-                        
-                        // Growth varies per crystal based on overall frost coverage
-                        let crystalGrowth = min(1.0, max(0, (frostCoverage - Double(i) / Double(crystalCount) * 0.3) * 1.5))
-                        
-                        if crystalGrowth > 0 {
-                            let baseLength = 15.0 + sin(seed) * 8.0
-                            let length = baseLength * crystalGrowth * (1 + sin(time * 2 + seed) * 0.15)
-                            
-                            // Crystal grows toward center
-                            let growthAngle = edgeAngle + .pi + sin(seed * 3) * 0.3
-                            
-                            let x = edgeX
-                            let y = edgeY
-                            
-                            var path = Path()
-                            path.move(to: CGPoint(x: x, y: y))
-                            
-                            // Main crystal branch
-                            let endX = x + cos(growthAngle) * length
-                            let endY = y + sin(growthAngle) * length
-                            path.addLine(to: CGPoint(x: endX, y: endY))
-                            
-                            // Side branches
-                            for branch in 0..<2 {
-                                let branchAngle = growthAngle + (Double(branch) - 0.5) * 0.6
-                                let branchLength = length * 0.5
-                                let branchProgress = 0.6
-                                let branchX = x + cos(growthAngle) * length * branchProgress
-                                let branchY = y + sin(growthAngle) * length * branchProgress
-                                
-                                path.move(to: CGPoint(x: branchX, y: branchY))
-                                path.addLine(to: CGPoint(
-                                    x: branchX + cos(branchAngle) * branchLength,
-                                    y: branchY + sin(branchAngle) * branchLength
-                                ))
-                            }
-                            
-                            // Draw crystal with glow
-                            let opacity = 0.5 * crystalGrowth + sin(time * 3 + seed) * 0.2 * crystalGrowth
-                            context.stroke(
-                                path,
-                                with: .color(Color.white.opacity(opacity)),
-                                lineWidth: 1.2
-                            )
-                            context.stroke(
-                                path,
-                                with: .color(Color.cyan.opacity(opacity * 0.6)),
-                                lineWidth: 2.5
-                            )
-                        }
-                    }
-                    
-                    // Frost texture overlay
-                    for i in 0..<40 {
-                        let seed = Double(i) * 234.567
-                        let x = sin(seed) * canvasSize.width * 0.4 + canvasSize.width * 0.5
-                        let y = cos(seed * 1.3) * canvasSize.height * 0.4 + canvasSize.height * 0.5
-                        
-                        // Only visible if frost has covered this area
-                        let distanceFromCenter = sqrt(pow(x - canvasSize.width * 0.5, 2) + pow(y - canvasSize.height * 0.5, 2))
-                        let maxDistance = min(canvasSize.width, canvasSize.height) * 0.5
-                        let normalizedDistance = distanceFromCenter / maxDistance
-                        
-                        // Frost grows from edge (1.0) to center (0.0)
-                        let isVisible = normalizedDistance > (1.0 - frostCoverage * 1.2)
-                        
-                        if isVisible {
-                            let baseLength = 6.0 + sin(seed * 2) * 3.0
-                            let length = baseLength * (1 + sin(time * 2.5 + seed) * 0.2)
-                            let angle = seed * 3 + time * 0.15
-                            
-                            var path = Path()
-                            path.move(to: CGPoint(x: x, y: y))
-                            
-                            let endX = x + cos(angle) * length
-                            let endY = y + sin(angle) * length
-                            path.addLine(to: CGPoint(x: endX, y: endY))
-                            
-                            let opacity = 0.35 + sin(time * 2.5 + seed) * 0.2
-                            context.stroke(
-                                path,
-                                with: .color(Color.white.opacity(opacity * frostCoverage)),
-                                lineWidth: 0.8
-                            )
-                        }
-                    }
-                }
-            }
-        }
-        .mask(gemShape.frame(width: size, height: size))
-        .blendMode(.screen)
-    }
-}
-
-struct MetallicEffect: View {
-    let gemShape: AnyShape
-    let size: CGFloat
-    let primaryColor: Color
     let rotation: Double
     
     var body: some View {
         ZStack {
-            // Main metallic sweep
-            gemShape
-                .fill(
-                    LinearGradient(
-                        stops: [
-                            .init(color: Color.white.opacity(0.9), location: 0.0),
-                            .init(color: primaryColor.opacity(0.6), location: 0.25),
-                            .init(color: Color.black.opacity(0.5), location: 0.5),
-                            .init(color: primaryColor.opacity(0.7), location: 0.75),
-                            .init(color: Color.white.opacity(0.85), location: 1.0)
-                        ],
-                        startPoint: UnitPoint(
-                            x: 0.5 + cos(rotation * .pi / 180) * 0.5,
-                            y: 0.5 + sin(rotation * .pi / 180) * 0.5
-                        ),
-                        endPoint: UnitPoint(
-                            x: 0.5 - cos(rotation * .pi / 180) * 0.5,
-                            y: 0.5 - sin(rotation * .pi / 180) * 0.5
-                        )
-                    )
-                )
-                .frame(width: size, height: size)
-            
-            // Sharp highlight bands (like polished metal)
-            ForEach(0..<3, id: \.self) { i in
+            // Clean rainbow rays from center
+            ForEach(0..<8, id: \.self) { i in
+                let angle = Double(i) * 45.0
+                let hue = Double(i) / 8.0
+                
                 Rectangle()
                     .fill(
                         LinearGradient(
                             colors: [
-                                Color.clear,
-                                Color.white.opacity(0.8),
+                                Color(hue: hue, saturation: 0.8, brightness: 1.0).opacity(0.5),
                                 Color.clear
                             ],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
                     )
-                    .frame(width: size * 0.15, height: size * 2)
-                    .rotationEffect(.degrees(rotation + Double(i) * 45))
-                    .offset(
-                        x: cos((rotation + Double(i) * 120) * .pi / 180) * size * 0.3,
-                        y: sin((rotation + Double(i) * 120) * .pi / 180) * size * 0.3
-                    )
-                    .mask(gemShape.frame(width: size, height: size))
-                    .blendMode(.overlay)
+                    .frame(width: size * 0.6, height: 2)
+                    .offset(x: size * 0.2)
+                    .rotationEffect(.degrees(angle + rotation * 0.5))
             }
         }
-        .blendMode(.overlay)
-        .opacity(0.7)
+        .mask(gemShape.frame(width: size, height: size))
+        .blendMode(.screen)
+        .opacity(0.6)
     }
 }
 
@@ -1440,132 +1244,155 @@ struct PrismEffect: View {
     @State private var trippyPhase: Double = 0
     
     var body: some View {
-        let maskedContent = TimelineView(.animation(minimumInterval: 0.016)) { timeline in
+        TimelineView(.animation(minimumInterval: 0.016)) { timeline in
             Canvas { context, canvasSize in
                 let time = timeline.date.timeIntervalSinceReferenceDate
-                
                 let centerX = canvasSize.width / 2
                 let centerY = canvasSize.height / 2
                 
-                // Holographic interference patterns - multiple frequency bands
-                for band in 0..<6 {
-                    let bandOffset = Double(band) * .pi / 3
-                    let bandFrequency = 8.0 + Double(band) * 4.0
-                    
-                    for strip in 0..<30 {
-                        let stripProgress = Double(strip) / 30.0
-                        let angle = time * 0.3 + bandOffset
-                        
-                        // Wave displacement
-                        let waveX = stripProgress * canvasSize.width
-                        let waveY1 = centerY + sin(stripProgress * bandFrequency + time * 2 + bandOffset) * canvasSize.height * 0.25
-                        let waveY2 = centerY + sin((stripProgress + 0.033) * bandFrequency + time * 2 + bandOffset) * canvasSize.height * 0.25
-                        
-                        // Rainbow color based on position and time
-                        let hue = (stripProgress + time * 0.2 + Double(band) * 0.16).truncatingRemainder(dividingBy: 1.0)
-                        let stripColor = Color(hue: hue, saturation: 1.0, brightness: 1.0)
-                        
-                        var path = Path()
-                        path.move(to: CGPoint(x: waveX, y: waveY1))
-                        path.addLine(to: CGPoint(x: waveX + 2, y: waveY2))
-                        
-                        // Vary opacity with interference pattern
-                        let interference = sin(stripProgress * 20 + time * 3) * 0.3 + 0.5
-                        
-                        context.stroke(
-                            path,
-                            with: .color(stripColor.opacity(interference * 0.6)),
-                            lineWidth: 3.0
-                        )
-                    }
-                }
+                // Draw holographic interference patterns
+                drawInterferencePatterns(
+                    context: context,
+                    canvasSize: canvasSize,
+                    centerY: centerY,
+                    time: time
+                )
                 
-                // Create shifting color zones
-                for zone in 0..<12 {
-                    let zoneDouble = Double(zone)
-                    let zoneAngle = zoneDouble * .pi / 6 + time * 0.5
-                    let hue = zoneDouble / 12.0
-                    let zoneColor = Color(hue: hue, saturation: 1.0, brightness: 1.0)
-                    
-                    // Radial gradient zone - break up calculations
-                    let cosZone = cos(zoneAngle)
-                    let sinZone = sin(zoneAngle)
-                    
-                    let startX = centerX + cosZone * canvasSize.width * 0.1
-                    let startY = centerY + sinZone * canvasSize.height * 0.1
-                    let endX = centerX + cosZone * canvasSize.width * 0.5
-                    let endY = centerY + sinZone * canvasSize.height * 0.5
-                    
-                    var path = Path()
-                    path.move(to: CGPoint(x: centerX, y: centerY))
-                    path.addLine(to: CGPoint(x: endX, y: endY))
-                    
-                    // Pulsing width
-                    let timeFactor = time * 2 + zoneDouble
-                    let pulseAmount = sin(timeFactor) * 10
-                    let pulseWidth: CGFloat = 20 + pulseAmount
-                    
-                    let opacity: Double = 0.35
-                    
-                    context.stroke(
-                        path,
-                        with: .color(zoneColor.opacity(opacity)),
-                        lineWidth: pulseWidth
-                    )
-                }
+                // Draw shifting color zones
+                drawColorZones(
+                    context: context,
+                    canvasSize: canvasSize,
+                    centerX: centerX,
+                    centerY: centerY,
+                    time: time
+                )
                 
-                // Kaleidoscope geometry - fractal-like patterns
-                let segmentCount = 8
-                for segment in 0..<segmentCount {
-                    let segmentAngle = Double(segment) * (.pi * 2 / Double(segmentCount))
-                    
-                    // Create triangular prism segments
-                    for layer in 0..<5 {
-                        let layerRadius = canvasSize.width * 0.15 * (1.0 + Double(layer) * 0.2)
-                        let nextRadius = canvasSize.width * 0.15 * (1.0 + Double(layer + 1) * 0.2)
-                        
-                        let angle1 = segmentAngle + time * 0.4
-                        let angle2 = segmentAngle + (.pi * 2 / Double(segmentCount)) + time * 0.4
-                        
-                        var path = Path()
-                        path.move(to: CGPoint(x: centerX, y: centerY))
-                        path.addLine(to: CGPoint(
-                            x: centerX + cos(angle1) * layerRadius,
-                            y: centerY + sin(angle1) * layerRadius
-                        ))
-                        path.addLine(to: CGPoint(
-                            x: centerX + cos(angle2) * layerRadius,
-                            y: centerY + sin(angle2) * layerRadius
-                        ))
-                        path.closeSubpath()
-                        
-                        // Rainbow gradient per segment
-                        let hue = (Double(segment) / Double(segmentCount) + time * 0.15).truncatingRemainder(dividingBy: 1.0)
-                        let segmentColor = Color(hue: hue, saturation: 0.9, brightness: 1.0)
-                        
-                        context.fill(
-                            path,
-                            with: .color(segmentColor.opacity(0.15))
-                        )
-                        
-                        context.stroke(
-                            path,
-                            with: .color(segmentColor.opacity(0.4)),
-                            lineWidth: 1.5
-                        )
-                    }
-                }
+                // Draw kaleidoscope geometry
+                drawKaleidoscope(
+                    context: context,
+                    canvasSize: canvasSize,
+                    centerX: centerX,
+                    centerY: centerY,
+                    time: time
+                )
             }
         }
         .mask(gemShape.frame(width: size, height: size))
         .blendMode(.screen)
-        
-        return maskedContent
-            .onAppear {
-                withAnimation(.linear(duration: 3.0).repeatForever(autoreverses: false)) {
-                    trippyPhase = .pi * 2
-                }
+        .onAppear {
+            withAnimation(.linear(duration: 3.0).repeatForever(autoreverses: false)) {
+                trippyPhase = .pi * 2
             }
+        }
+    }
+    
+    private func drawInterferencePatterns(context: GraphicsContext, canvasSize: CGSize, centerY: CGFloat, time: Double) {
+        for band in 0..<6 {
+            let bandOffset = Double(band) * .pi / 3
+            let bandFrequency = 8.0 + Double(band) * 4.0
+            
+            for strip in 0..<30 {
+                let stripProgress = Double(strip) / 30.0
+                
+                // Wave displacement
+                let waveX = stripProgress * canvasSize.width
+                let waveCalc1 = stripProgress * bandFrequency + time * 2 + bandOffset
+                let waveCalc2 = (stripProgress + 0.033) * bandFrequency + time * 2 + bandOffset
+                let waveY1 = centerY + sin(waveCalc1) * canvasSize.height * 0.25
+                let waveY2 = centerY + sin(waveCalc2) * canvasSize.height * 0.25
+                
+                // Rainbow color
+                let hueCalc = stripProgress + time * 0.2 + Double(band) * 0.16
+                let hue = hueCalc.truncatingRemainder(dividingBy: 1.0)
+                let stripColor = Color(hue: hue, saturation: 1.0, brightness: 1.0)
+                
+                var path = Path()
+                path.move(to: CGPoint(x: waveX, y: waveY1))
+                path.addLine(to: CGPoint(x: waveX + 2, y: waveY2))
+                
+                // Vary opacity with interference pattern
+                let interferenceCalc = stripProgress * 20 + time * 3
+                let interference = sin(interferenceCalc) * 0.3 + 0.5
+                let finalOpacity = interference * 0.6
+                
+                context.stroke(
+                    path,
+                    with: .color(stripColor.opacity(finalOpacity)),
+                    lineWidth: 3.0
+                )
+            }
+        }
+    }
+    
+    private func drawColorZones(context: GraphicsContext, canvasSize: CGSize, centerX: CGFloat, centerY: CGFloat, time: Double) {
+        for zone in 0..<12 {
+            let zoneDouble = Double(zone)
+            let zoneAngle = zoneDouble * .pi / 6 + time * 0.5
+            let hue = zoneDouble / 12.0
+            let zoneColor = Color(hue: hue, saturation: 1.0, brightness: 1.0)
+            
+            // Calculate positions
+            let cosZone = cos(zoneAngle)
+            let sinZone = sin(zoneAngle)
+            let endX = centerX + cosZone * canvasSize.width * 0.5
+            let endY = centerY + sinZone * canvasSize.height * 0.5
+            
+            var path = Path()
+            path.move(to: CGPoint(x: centerX, y: centerY))
+            path.addLine(to: CGPoint(x: endX, y: endY))
+            
+            // Pulsing width
+            let timeFactor = time * 2 + zoneDouble
+            let pulseAmount = sin(timeFactor) * 10
+            let pulseWidth: CGFloat = 20 + pulseAmount
+            
+            context.stroke(
+                path,
+                with: .color(zoneColor.opacity(0.35)),
+                lineWidth: pulseWidth
+            )
+        }
+    }
+    
+    private func drawKaleidoscope(context: GraphicsContext, canvasSize: CGSize, centerX: CGFloat, centerY: CGFloat, time: Double) {
+        let segmentCount = 8
+        for segment in 0..<segmentCount {
+            let segmentAngle = Double(segment) * (.pi * 2 / Double(segmentCount))
+            
+            for layer in 0..<5 {
+                let layerRadius = canvasSize.width * 0.15 * (1.0 + Double(layer) * 0.2)
+                let angle1 = segmentAngle + time * 0.4
+                let angle2 = segmentAngle + (.pi * 2 / Double(segmentCount)) + time * 0.4
+                
+                var path = Path()
+                path.move(to: CGPoint(x: centerX, y: centerY))
+                path.addLine(to: CGPoint(
+                    x: centerX + cos(angle1) * layerRadius,
+                    y: centerY + sin(angle1) * layerRadius
+                ))
+                path.addLine(to: CGPoint(
+                    x: centerX + cos(angle2) * layerRadius,
+                    y: centerY + sin(angle2) * layerRadius
+                ))
+                path.closeSubpath()
+                
+                // Rainbow gradient per segment
+                let hueCalc = Double(segment) / Double(segmentCount) + time * 0.15
+                let hue = hueCalc.truncatingRemainder(dividingBy: 1.0)
+                let segmentColor = Color(hue: hue, saturation: 0.9, brightness: 1.0)
+                
+                context.fill(
+                    path,
+                    with: .color(segmentColor.opacity(0.15))
+                )
+                
+                context.stroke(
+                    path,
+                    with: .color(segmentColor.opacity(0.4)),
+                    lineWidth: 1.5
+                )
+            }
+        }
     }
 }
 
@@ -1580,123 +1407,159 @@ struct CelestialEffect: View {
         TimelineView(.animation(minimumInterval: 0.016)) { timeline in
             Canvas { context, canvasSize in
                 let time = timeline.date.timeIntervalSinceReferenceDate
-                
                 let centerX = canvasSize.width / 2
                 let centerY = canvasSize.height / 2
                 
-                // Psychedelic mandala pattern with breathing geometry
-                let ringCount = 8
-                let petalCount = 12
+                // Draw mandala petals
+                drawMandala(
+                    context: context,
+                    canvasSize: canvasSize,
+                    centerX: centerX,
+                    centerY: centerY,
+                    time: time
+                )
                 
-                for ring in 0..<ringCount {
-                    let ringProgress = Double(ring) / Double(ringCount)
-                    let radius = canvasSize.width * 0.45 * ringProgress
-                    
-                    // Each ring breathes at different rates
-                    let breathe = sin(time * (1.5 + Double(ring) * 0.3)) * 0.2 + 1.0
-                    let animatedRadius = radius * breathe
-                    
-                    for petal in 0..<petalCount {
-                        let baseAngle = Double(petal) * (.pi * 2 / Double(petalCount))
-                        let angleOffset = time * 0.5 + Double(ring) * 0.2
-                        let angle = baseAngle + angleOffset
-                        
-                        // Petal position with spiral distortion
-                        let spiralFactor = sin(time * 0.8 + Double(petal) * 0.5) * 0.3
-                        let x = centerX + cos(angle + spiralFactor) * animatedRadius
-                        let y = centerY + sin(angle + spiralFactor) * animatedRadius
-                        
-                        // Petal shape - elongated and organic
-                        let petalLength = canvasSize.width * 0.12 * (1.0 - ringProgress * 0.5)
-                        let petalWidth = petalLength * 0.4
-                        
-                        // Petal glow with color cycling
-                        let hueShift = (time * 30 + Double(petal) * 30 + Double(ring) * 15).truncatingRemainder(dividingBy: 360)
-                        let petalHue = (hueShift / 360.0)
-                        let petalColor = Color(hue: petalHue, saturation: 0.9, brightness: 1.0)
-                        
-                        // Draw petal as ellipse
-                        let petalRect = CGRect(
-                            x: x - petalWidth / 2,
-                            y: y - petalLength / 2,
-                            width: petalWidth,
-                            height: petalLength
-                        )
-                        let petalPath = Path(ellipseIn: petalRect)
-                        
-                        // Pulsing opacity
-                        let pulseValue = sin(time * 2 + Double(petal) * 0.5 + Double(ring) * 0.3) * 0.3 + 0.7
-                        let opacity = 0.4 * pulseValue * (1.0 - ringProgress * 0.3)
-                        
-                        // Rotate petal to face center with slight wobble
-                        let wobble = sin(time * 3 + Double(petal)) * 0.2
-                        var transform = CGAffineTransform(translationX: x, y: y)
-                        transform = transform.rotated(by: angle + .pi / 2 + wobble)
-                        transform = transform.translatedBy(x: -x, y: -y)
-                        
-                        var rotatedPath = Path(petalPath.cgPath)
-                        rotatedPath = rotatedPath.applying(transform)
-                        
-                        // Draw outer glow
-                        context.fill(
-                            rotatedPath,
-                            with: .color(petalColor.opacity(opacity * 0.4))
-                        )
-                        
-                        // Draw bright core
-                        let coreRect = CGRect(
-                            x: x - petalWidth / 4,
-                            y: y - petalLength / 4,
-                            width: petalWidth / 2,
-                            height: petalLength / 2
-                        )
-                        var corePath = Path(ellipseIn: coreRect)
-                        corePath = corePath.applying(transform)
-                        context.fill(
-                            corePath,
-                            with: .color(Color.white.opacity(opacity * 0.6))
-                        )
-                    }
-                }
-                
-                // Central sacred geometry - rotating
-                let geometryRotation = time * 0.8
-                for layer in 0..<6 {
-                    let layerRadius = canvasSize.width * 0.15 * (1.0 + Double(layer) * 0.25)
-                    let sides = 6
-                    
-                    var path = Path()
-                    for i in 0...sides {
-                        let angle = Double(i) * (.pi * 2 / Double(sides)) + geometryRotation + Double(layer) * 0.5
-                        let x = centerX + cos(angle) * layerRadius
-                        let y = centerY + sin(angle) * layerRadius
-                        
-                        if i == 0 {
-                            path.move(to: CGPoint(x: x, y: y))
-                        } else {
-                            path.addLine(to: CGPoint(x: x, y: y))
-                        }
-                    }
-                    
-                    let hueShift = (time * 40 + Double(layer) * 60).truncatingRemainder(dividingBy: 360)
-                    let lineColor = Color(hue: hueShift / 360.0, saturation: 1.0, brightness: 1.0)
-                    
-                    context.stroke(
-                        path,
-                        with: .color(lineColor.opacity(0.5)),
-                        lineWidth: 2.0
-                    )
-                    context.stroke(
-                        path,
-                        with: .color(Color.white.opacity(0.3)),
-                        lineWidth: 1.0
-                    )
-                }
+                // Draw central sacred geometry
+                drawSacredGeometry(
+                    context: context,
+                    canvasSize: canvasSize,
+                    centerX: centerX,
+                    centerY: centerY,
+                    time: time
+                )
             }
         }
         .frame(width: size, height: size)
         .mask(gemShape.frame(width: size, height: size))
         .blendMode(.screen)
+    }
+    
+    private func drawMandala(context: GraphicsContext, canvasSize: CGSize, centerX: CGFloat, centerY: CGFloat, time: Double) {
+        let ringCount = 8
+        let petalCount = 12
+        
+        for ring in 0..<ringCount {
+            let ringDouble = Double(ring)
+            let ringProgress = ringDouble / Double(ringCount)
+            let radius = canvasSize.width * 0.45 * ringProgress
+            
+            // Each ring breathes at different rates
+            let breatheCalc = time * (1.5 + ringDouble * 0.3)
+            let breathe = sin(breatheCalc) * 0.2 + 1.0
+            let animatedRadius = radius * breathe
+            
+            for petal in 0..<petalCount {
+                let petalDouble = Double(petal)
+                
+                // Calculate angles
+                let baseAngle = petalDouble * (.pi * 2 / Double(petalCount))
+                let angleOffset = time * 0.5 + ringDouble * 0.2
+                let angle = baseAngle + angleOffset
+                
+                // Petal position with spiral distortion
+                let spiralCalc = time * 0.8 + petalDouble * 0.5
+                let spiralFactor = sin(spiralCalc) * 0.3
+                let cosAngle = cos(angle + spiralFactor)
+                let sinAngle = sin(angle + spiralFactor)
+                let x = centerX + cosAngle * animatedRadius
+                let y = centerY + sinAngle * animatedRadius
+                
+                // Petal dimensions
+                let petalLength = canvasSize.width * 0.12 * (1.0 - ringProgress * 0.5)
+                let petalWidth = petalLength * 0.4
+                
+                // Petal color
+                let hueCalc = time * 30 + petalDouble * 30 + ringDouble * 15
+                let hueShift = hueCalc.truncatingRemainder(dividingBy: 360)
+                let petalHue = hueShift / 360.0
+                let petalColor = Color(hue: petalHue, saturation: 0.9, brightness: 1.0)
+                
+                // Petal path
+                let petalRect = CGRect(
+                    x: x - petalWidth / 2,
+                    y: y - petalLength / 2,
+                    width: petalWidth,
+                    height: petalLength
+                )
+                let petalPath = Path(ellipseIn: petalRect)
+                
+                // Pulsing opacity
+                let pulseCalc = time * 2 + petalDouble * 0.5 + ringDouble * 0.3
+                let pulseValue = sin(pulseCalc) * 0.3 + 0.7
+                let opacity = 0.4 * pulseValue * (1.0 - ringProgress * 0.3)
+                
+                // Transform for rotation
+                let wobbleCalc = time * 3 + petalDouble
+                let wobble = sin(wobbleCalc) * 0.2
+                var transform = CGAffineTransform(translationX: x, y: y)
+                transform = transform.rotated(by: angle + .pi / 2 + wobble)
+                transform = transform.translatedBy(x: -x, y: -y)
+                
+                var rotatedPath = Path(petalPath.cgPath)
+                rotatedPath = rotatedPath.applying(transform)
+                
+                // Draw outer glow
+                let outerOpacity = opacity * 0.4
+                context.fill(
+                    rotatedPath,
+                    with: .color(petalColor.opacity(outerOpacity))
+                )
+                
+                // Draw bright core
+                let coreRect = CGRect(
+                    x: x - petalWidth / 4,
+                    y: y - petalLength / 4,
+                    width: petalWidth / 2,
+                    height: petalLength / 2
+                )
+                var corePath = Path(ellipseIn: coreRect)
+                corePath = corePath.applying(transform)
+                let coreOpacity = opacity * 0.6
+                context.fill(
+                    corePath,
+                    with: .color(Color.white.opacity(coreOpacity))
+                )
+            }
+        }
+    }
+    
+    private func drawSacredGeometry(context: GraphicsContext, canvasSize: CGSize, centerX: CGFloat, centerY: CGFloat, time: Double) {
+        let geometryRotation = time * 0.8
+        
+        for layer in 0..<6 {
+            let layerDouble = Double(layer)
+            let layerRadius = canvasSize.width * 0.15 * (1.0 + layerDouble * 0.25)
+            let sides = 6
+            
+            var path = Path()
+            for i in 0...sides {
+                let iDouble = Double(i)
+                let angleCalc = iDouble * (.pi * 2 / Double(sides)) + geometryRotation + layerDouble * 0.5
+                let x = centerX + cos(angleCalc) * layerRadius
+                let y = centerY + sin(angleCalc) * layerRadius
+                
+                if i == 0 {
+                    path.move(to: CGPoint(x: x, y: y))
+                } else {
+                    path.addLine(to: CGPoint(x: x, y: y))
+                }
+            }
+            
+            let hueCalc = time * 40 + layerDouble * 60
+            let hueShift = hueCalc.truncatingRemainder(dividingBy: 360)
+            let lineColor = Color(hue: hueShift / 360.0, saturation: 1.0, brightness: 1.0)
+            
+            context.stroke(
+                path,
+                with: .color(lineColor.opacity(0.5)),
+                lineWidth: 2.0
+            )
+            context.stroke(
+                path,
+                with: .color(Color.white.opacity(0.3)),
+                lineWidth: 1.0
+            )
+        }
     }
 }
 
@@ -2266,450 +2129,6 @@ struct MarquiseShape: Shape {
 struct CushionShape: Shape {
     func path(in rect: CGRect) -> Path {
         Path(roundedRect: rect, cornerRadius: rect.width * 0.15)
-    }
-}
-
-// MARK: - Fluid Swirls
-
-/// Animated fluid swirls using Canvas
-struct FluidSwirls: View {
-    let model: CrystalModel
-    let size: CGFloat
-    
-    @State private var phase: Double = 0
-    
-    var body: some View {
-        TimelineView(.animation) { timeline in
-            Canvas { context, canvasSize in
-                let time = timeline.date.timeIntervalSinceReferenceDate
-                let animated = phase + time * 0.5
-                
-                // Draw multiple fluid swirl layers
-                for layer in 0..<3 {
-                    let layerPhase = animated + Double(layer) * 2.0
-                    drawFluidLayer(
-                        context: context,
-                        size: canvasSize,
-                        phase: layerPhase,
-                        layer: layer
-                    )
-                }
-            }
-        }
-        .blendMode(.plusLighter)
-    }
-    
-    private func drawFluidLayer(context: GraphicsContext, size: CGSize, phase: Double, layer: Int) {
-        let centerX = size.width / 2
-        let centerY = size.height / 2
-        let radius = min(size.width, size.height) * 0.3
-        
-        var path = Path()
-        
-        // Create swirling path
-        for i in 0..<100 {
-            let t = Double(i) / 100.0
-            let angle = t * .pi * 4 + phase
-            let spiralRadius = radius * (0.3 + 0.7 * t)
-            
-            // Add noise/perturbation for organic feel
-            let noise = sin(angle * 3 + phase) * 10
-            let x = centerX + cos(angle) * (spiralRadius + noise)
-            let y = centerY + sin(angle) * (spiralRadius + noise)
-            
-            if i == 0 {
-                path.move(to: CGPoint(x: x, y: y))
-            } else {
-                path.addLine(to: CGPoint(x: x, y: y))
-            }
-        }
-        
-        // Color based on layer
-        let hue = (model.primaryHue + Double(layer) * 30) / 360.0
-        let color = Color(hue: hue, saturation: model.saturation, brightness: 0.9)
-        
-        context.stroke(
-            path,
-            with: .color(color.opacity(0.4)),
-            lineWidth: 2
-        )
-    }
-}
-
-// MARK: - Particle System
-
-/// SpriteKit-based particle system for magical effects
-struct MagicalParticleScene: UIViewRepresentable {
-    let model: CrystalModel
-    let size: CGFloat
-    
-    func makeUIView(context: Context) -> SKView {
-        let view = SKView()
-        view.backgroundColor = .clear
-        view.allowsTransparency = true
-        view.ignoresSiblingOrder = true
-        
-        let scene = ParticleScene(size: CGSize(width: size, height: size))
-        scene.backgroundColor = .clear
-        scene.scaleMode = .aspectFit
-        scene.model = model
-        
-        view.presentScene(scene)
-        view.isPaused = false  // Ensure animations run
-        return view
-    }
-    
-    func updateUIView(_ uiView: SKView, context: Context) {
-        // Update if needed
-    }
-}
-
-class ParticleScene: SKScene {
-    var model: CrystalModel?
-    
-    // Lazy-loaded particle textures
-    private lazy var circleTexture: SKTexture = {
-        createCircleTexture(size: 32)
-    }()
-    
-    private lazy var glowTexture: SKTexture = {
-        createGlowTexture(size: 64)
-    }()
-    
-    private lazy var sparkTexture: SKTexture = {
-        createSparkTexture(size: 24)
-    }()
-    
-    override func didMove(to view: SKView) {
-        guard let model = model else { return }
-        
-        // Create multiple particle emitters for layered effects
-        createOrbitingParticles(model: model)
-        createChaoticSparkBursts(model: model)
-        createEnergyRays(model: model)
-        createShimmeringDust(model: model)
-    }
-    
-    // MARK: - Texture Generation
-    
-    private func createCircleTexture(size: CGFloat) -> SKTexture {
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
-        let image = renderer.image { context in
-            let rect = CGRect(x: 0, y: 0, width: size, height: size)
-            let ctx = context.cgContext
-            
-            // Draw a soft circle with gradient
-            let colors = [
-                UIColor.white.cgColor,
-                UIColor.white.withAlphaComponent(0.5).cgColor,
-                UIColor.clear.cgColor
-            ]
-            
-            let gradient = CGGradient(
-                colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                colors: colors as CFArray,
-                locations: [0, 0.6, 1.0]
-            )!
-            
-            ctx.drawRadialGradient(
-                gradient,
-                startCenter: CGPoint(x: size / 2, y: size / 2),
-                startRadius: 0,
-                endCenter: CGPoint(x: size / 2, y: size / 2),
-                endRadius: size / 2,
-                options: []
-            )
-        }
-        return SKTexture(image: image)
-    }
-    
-    private func createGlowTexture(size: CGFloat) -> SKTexture {
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
-        let image = renderer.image { context in
-            let ctx = context.cgContext
-            
-            // Soft glow with more diffuse edge
-            let colors = [
-                UIColor.white.cgColor,
-                UIColor.white.withAlphaComponent(0.7).cgColor,
-                UIColor.white.withAlphaComponent(0.3).cgColor,
-                UIColor.clear.cgColor
-            ]
-            
-            let gradient = CGGradient(
-                colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                colors: colors as CFArray,
-                locations: [0, 0.3, 0.7, 1.0]
-            )!
-            
-            ctx.drawRadialGradient(
-                gradient,
-                startCenter: CGPoint(x: size / 2, y: size / 2),
-                startRadius: 0,
-                endCenter: CGPoint(x: size / 2, y: size / 2),
-                endRadius: size / 2,
-                options: []
-            )
-        }
-        return SKTexture(image: image)
-    }
-    
-    private func createSparkTexture(size: CGFloat) -> SKTexture {
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
-        let image = renderer.image { context in
-            let ctx = context.cgContext
-            
-            // Four-pointed star/spark
-            ctx.setFillColor(UIColor.white.cgColor)
-            
-            let center = CGPoint(x: size / 2, y: size / 2)
-            let radius = size / 2
-            
-            // Draw a star shape
-            let path = CGMutablePath()
-            path.move(to: CGPoint(x: center.x, y: center.y - radius)) // Top
-            path.addLine(to: CGPoint(x: center.x + radius * 0.2, y: center.y - radius * 0.2))
-            path.addLine(to: CGPoint(x: center.x + radius, y: center.y)) // Right
-            path.addLine(to: CGPoint(x: center.x + radius * 0.2, y: center.y + radius * 0.2))
-            path.addLine(to: CGPoint(x: center.x, y: center.y + radius)) // Bottom
-            path.addLine(to: CGPoint(x: center.x - radius * 0.2, y: center.y + radius * 0.2))
-            path.addLine(to: CGPoint(x: center.x - radius, y: center.y)) // Left
-            path.addLine(to: CGPoint(x: center.x - radius * 0.2, y: center.y - radius * 0.2))
-            path.closeSubpath()
-            
-            ctx.addPath(path)
-            ctx.fillPath()
-            
-            // Add glow
-            ctx.setShadow(offset: .zero, blur: 4, color: UIColor.white.cgColor)
-            ctx.addPath(path)
-            ctx.fillPath()
-        }
-        return SKTexture(image: image)
-    }
-    
-    // MARK: - Particle Emitters
-    
-    private func createOrbitingParticles(model: CrystalModel) {
-        // Fast-moving orbital particles that zip around
-        let emitter = SKEmitterNode()
-        
-        emitter.particleTexture = circleTexture
-        emitter.particleBirthRate = 20  // Reduced from 50
-        emitter.particleLifetime = 2.5
-        emitter.particleLifetimeRange = 1.0
-        
-        emitter.position = CGPoint(x: size.width / 2, y: size.height / 2)
-        emitter.particlePositionRange = CGVector(dx: size.width * 0.15, dy: size.height * 0.15)
-        
-        // Fast, tangential movement for orbital feel
-        emitter.particleSpeed = 60  // Reduced
-        emitter.particleSpeedRange = 30
-        emitter.emissionAngleRange = CGFloat.pi * 2
-        
-        // Rotation for visual interest
-        emitter.particleRotation = 0
-        emitter.particleRotationRange = CGFloat.pi * 2
-        emitter.particleRotationSpeed = CGFloat.pi * 2
-        
-        // Thin streaky particles
-        emitter.particleAlpha = 0.6  // More subtle
-        emitter.particleAlphaSpeed = -0.3
-        
-        emitter.particleScale = 0.12
-        emitter.particleScaleRange = 0.08
-        emitter.particleScaleSpeed = -0.04
-        
-        let primaryColor = UIColor(
-            hue: model.primaryHue / 360.0,
-            saturation: model.saturation,
-            brightness: 1.0,
-            alpha: 1.0
-        )
-        emitter.particleColor = primaryColor
-        emitter.particleColorBlendFactor = 1.0
-        
-        emitter.particleBlendMode = .add
-        
-        addChild(emitter)
-    }
-    
-    private func createChaoticSparkBursts(model: CrystalModel) {
-        // Random explosive bursts of sparkles
-        let emitter = SKEmitterNode()
-        
-        emitter.particleTexture = sparkTexture
-        emitter.particleBirthRate = 0  // We'll trigger bursts manually
-        emitter.particleLifetime = 0.8
-        emitter.particleLifetimeRange = 0.4
-        
-        emitter.position = CGPoint(x: size.width / 2, y: size.height / 2)
-        
-        // Explosive outward bursts
-        emitter.particleSpeed = 120
-        emitter.particleSpeedRange = 80
-        emitter.emissionAngleRange = CGFloat.pi * 2
-        
-        // Rapid fade
-        emitter.particleAlpha = 1.0
-        emitter.particleAlphaSpeed = -1.5
-        
-        emitter.particleScale = 0.25
-        emitter.particleScaleRange = 0.15
-        emitter.particleScaleSpeed = -0.3
-        
-        // Wild rotation
-        emitter.particleRotation = 0
-        emitter.particleRotationRange = CGFloat.pi * 2
-        emitter.particleRotationSpeed = CGFloat.pi * 8
-        
-        let secondaryColor = UIColor(
-            hue: model.secondaryHue / 360.0,
-            saturation: model.saturation * 0.8,
-            brightness: 1.0,
-            alpha: 1.0
-        )
-        emitter.particleColor = secondaryColor
-        emitter.particleColorBlendFactor = 0.7
-        
-        emitter.particleBlendMode = .add
-        
-        addChild(emitter)
-        
-        // Create random bursts
-        let burstAction = SKAction.sequence([
-            SKAction.run { [weak emitter] in
-                // Random burst size
-                emitter?.particleBirthRate = CGFloat.random(in: 200...500)
-            },
-            SKAction.wait(forDuration: 0.05),
-            SKAction.run { [weak emitter] in
-                emitter?.particleBirthRate = 0
-            },
-            SKAction.wait(forDuration: Double.random(in: 0.3...1.2))
-        ])
-        
-        emitter.run(.repeatForever(burstAction))
-    }
-    
-    private func createEnergyRays(model: CrystalModel) {
-        // Shooting rays that dart out from center
-        let emitter = SKEmitterNode()
-        
-        emitter.particleTexture = glowTexture
-        emitter.particleBirthRate = 12  // Reduced from 25
-        emitter.particleLifetime = 1.8
-        emitter.particleLifetimeRange = 0.6
-        
-        emitter.position = CGPoint(x: size.width / 2, y: size.height / 2)
-        emitter.particlePositionRange = CGVector(dx: 15, dy: 15)
-        
-        // Fast rays shooting outward
-        emitter.particleSpeed = 80  // Reduced
-        emitter.particleSpeedRange = 40
-        emitter.emissionAngleRange = CGFloat.pi * 2
-        
-        // Stretch them into rays
-        emitter.particleAlpha = 0.5  // More subtle
-        emitter.particleAlphaSpeed = -0.6
-        
-        emitter.particleScale = 0.35
-        emitter.particleScaleRange = 0.15
-        emitter.particleScaleSpeed = -0.12
-        
-        // Point in direction of motion
-        emitter.particleRotation = 0
-        emitter.particleRotationRange = CGFloat.pi * 2
-        
-        let rayColor = UIColor(
-            hue: (model.primaryHue + 30) / 360.0,
-            saturation: model.saturation * 0.9,
-            brightness: 0.95,
-            alpha: 1.0
-        )
-        emitter.particleColor = rayColor
-        emitter.particleColorBlendFactor = 0.9
-        
-        emitter.particleBlendMode = .add
-        
-        addChild(emitter)
-    }
-    
-    private func createShimmeringDust(model: CrystalModel) {
-        // Chaotic swirling dust that changes direction
-        let emitter = SKEmitterNode()
-        
-        emitter.particleTexture = circleTexture
-        emitter.particleBirthRate = 25  // Reduced from 40
-        emitter.particleLifetime = 3.0
-        emitter.particleLifetimeRange = 1.5
-        
-        emitter.position = CGPoint(x: size.width / 2, y: size.height / 2)
-        emitter.particlePositionRange = CGVector(dx: size.width * 0.25, dy: size.height * 0.25)
-        
-        // Slow chaotic drift
-        emitter.particleSpeed = 20  // Reduced
-        emitter.particleSpeedRange = 15
-        emitter.emissionAngleRange = CGFloat.pi * 2
-        
-        // Add turbulence with rotation
-        emitter.particleRotation = 0
-        emitter.particleRotationRange = CGFloat.pi * 2
-        emitter.particleRotationSpeed = CGFloat.pi * 0.8
-        
-        // Shimmer effect with alpha variation
-        emitter.particleAlpha = 0.3  // More subtle
-        emitter.particleAlphaRange = 0.2
-        emitter.particleAlphaSpeed = 0  // Stay visible
-        
-        emitter.particleScale = 0.08
-        emitter.particleScaleRange = 0.06
-        
-        // Random pulsing
-        emitter.particleScaleSpeed = 0.03
-        emitter.particleScaleSequence = nil
-        
-        // Color cycling through primary and secondary
-        let dustColor = UIColor(
-            hue: model.primaryHue / 360.0,
-            saturation: model.saturation * 0.5,
-            brightness: 1.0,
-            alpha: 1.0
-        )
-        emitter.particleColor = dustColor
-        emitter.particleColorBlendFactor = 0.7
-        
-        // Color variation over lifetime
-        let colorAction = SKAction.sequence([
-            SKAction.customAction(withDuration: 1.5) { [weak emitter] node, elapsedTime in
-                guard let emitter = emitter else { return }
-                let progress = elapsedTime / 1.5
-                let hue = (model.primaryHue + (model.secondaryHue - model.primaryHue) * progress) / 360.0
-                emitter.particleColor = UIColor(
-                    hue: hue,
-                    saturation: model.saturation * 0.5,
-                    brightness: 1.0,
-                    alpha: 1.0
-                )
-            },
-            SKAction.customAction(withDuration: 1.5) { [weak emitter] node, elapsedTime in
-                guard let emitter = emitter else { return }
-                let progress = 1.0 - (elapsedTime / 1.5)
-                let hue = (model.primaryHue + (model.secondaryHue - model.primaryHue) * progress) / 360.0
-                emitter.particleColor = UIColor(
-                    hue: hue,
-                    saturation: model.saturation * 0.5,
-                    brightness: 1.0,
-                    alpha: 1.0
-                )
-            }
-        ])
-        
-        emitter.run(.repeatForever(colorAction))
-        
-        emitter.particleBlendMode = .add
-        
-        addChild(emitter)
     }
 }
 

@@ -35,9 +35,9 @@ struct CoinsListContainer: View {
                             }
                         }
                         
-                        // 🎲 Crystal Playground - for testing
+                        // 🎲 Gem Generator - for testing
                         ToolbarItem(placement: .topBarTrailing) {
-                            NavigationLink(destination: MagicalCrystalPlayground()) {
+                            NavigationLink(destination: GemTestingHub()) {
                                 Image(systemName: "sparkles")
                                     .foregroundColor(.cyan)
                             }
