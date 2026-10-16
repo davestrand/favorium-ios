@@ -19,7 +19,7 @@ extension FavorGemView {
         FavorGemView(
             shape: .heart,
             gemColor: .pink,
-            frameTier: .gold,
+            frameTier: .legacy,
             size: 200
         )
     }
@@ -29,7 +29,7 @@ extension FavorGemView {
         FavorGemView(
             shape: .brilliant,
             gemColor: .blue,
-            frameTier: .bronze,
+            frameTier: .seed,
             size: 100,
             showGlow: false,
             showShimmer: false
@@ -41,7 +41,7 @@ extension FavorGemView {
         FavorGemView(
             shape: .star,
             gemColor: .yellow,
-            frameTier: .silver,
+            frameTier: .bloom,
             frameColor: .purple,  // Custom frame color
             size: 200
         )
@@ -65,7 +65,7 @@ struct GemIntegrationExamples {
                 FavorGemView(
                     shape: gemShape,
                     gemColor: gemColor,
-                    frameTier: .bronze,
+                    frameTier: .seed,
                     size: 50,
                     showGlow: false,      // Disable for performance
                     showShimmer: false    // Disable for performance
@@ -101,7 +101,7 @@ struct GemIntegrationExamples {
                         FavorGemView(
                             shape: gem.0,
                             gemColor: gem.1,
-                            frameTier: .silver,
+                            frameTier: .bloom,
                             size: 120
                         )
                         
@@ -199,7 +199,7 @@ struct GemIntegrationExamples {
             FavorGemView(
                 shape: .star,
                 gemColor: .yellow,
-                frameTier: .gold,
+                frameTier: .legacy,
                 size: 200
             )
             .scaleEffect(scale)
@@ -226,7 +226,7 @@ struct GemIntegrationExamples {
             FavorGemView(
                 shape: .heart,
                 gemColor: .pink,
-                frameTier: .gold,
+                frameTier: .legacy,
                 size: 200,
                 showShimmer: true
             )
@@ -258,7 +258,7 @@ struct TransferEvolutionExample: View {
                 
                 // Newborn (0 transfers)
                 evolutionStage(
-                    tier: .bronze,
+                    tier: .seed,
                     transferCount: 0,
                     phase: "Newborn",
                     description: "Fresh and simple"
@@ -266,7 +266,7 @@ struct TransferEvolutionExample: View {
                 
                 // Awakened (5 transfers)
                 evolutionStage(
-                    tier: .silver,
+                    tier: .bloom,
                     transferCount: 5,
                     phase: "Awakened",
                     description: "First kindness glows within"
@@ -274,7 +274,7 @@ struct TransferEvolutionExample: View {
                 
                 // Radiant (15 transfers)
                 evolutionStage(
-                    tier: .silver,
+                    tier: .legacy,
                     transferCount: 15,
                     phase: "Radiant",
                     description: "Steadier inner light"
@@ -282,7 +282,7 @@ struct TransferEvolutionExample: View {
                 
                 // Storied (30 transfers)
                 evolutionStage(
-                    tier: .gold,
+                    tier: .radiance,
                     transferCount: 30,
                     phase: "Storied",
                     description: "Many journeys layered within"
@@ -290,7 +290,7 @@ struct TransferEvolutionExample: View {
                 
                 // Legendary (50+ transfers)
                 evolutionStage(
-                    tier: .gold,
+                    tier: .radiance,
                     transferCount: 50,
                     phase: "Legendary",
                     description: "Lit from somewhere else"
@@ -392,7 +392,7 @@ struct ColorPaletteGallery: View {
                         FavorGemView(
                             shape: .brilliant,
                             gemColor: palette.1,
-                            frameTier: .gold,
+                            frameTier: .legacy,
                             frameColor: palette.2,
                             size: 140,
                             showGlow: true,

@@ -5,47 +5,68 @@
 ```
 FavoriumFantasyProduction/
 │
-├── Gemstones (8 files, grayscale 512×512)
-│   ├── gem_brilliant.png        → GemShape.brilliant
-│   ├── gem_heart.png            → GemShape.heart
-│   ├── gem_star.png             → GemShape.star
-│   ├── gem_hexagon.png          → GemShape.hexagon
-│   ├── gem_octagon.png          → GemShape.octagon
-│   ├── gem_pear.png             → GemShape.pear
-│   ├── gem_marquise.png         → GemShape.marquise
-│   └── gem_cushion.png          → GemShape.cushion
+├── Gemstones (12 files total)
+│   ├── Legacy System (8 files, grayscale 512×512)
+│   │   ├── gem_brilliant.png        → GemShape.brilliant (all tiers)
+│   │   ├── gem_heart.png            → GemShape.heart (all tiers)
+│   │   ├── gem_star.png             → GemShape.star (all tiers)
+│   │   ├── gem_hexagon.png          → GemShape.hexagon (all tiers)
+│   │   ├── gem_octagon.png          → GemShape.octagon (all tiers)
+│   │   ├── gem_pear.png             → GemShape.pear (all tiers)
+│   │   ├── gem_marquise.png         → GemShape.marquise (all tiers)
+│   │   └── gem_cushion.png          → GemShape.cushion (all tiers)
+│   │
+│   └── Progressive System (4 files, grayscale 512×512)
+│       ├── gem_seed_lightning.png      → GemShape.lightning (Seed tier)
+│       ├── gem_bloom_lightning.png     → GemShape.lightning (Bloom tier)
+│       ├── gem_legacy_lightning.png    → GemShape.lightning (Legacy tier)
+│       └── gem_radiance_lightning.png  → GemShape.lightning (Radiance tier)
 │
-└── Frames (24 files, grayscale 512×512 with transparent openings)
+└── Frames (36 files, grayscale 512×512 with transparent openings)
     │
-    ├── Bronze Tier (0-4 transfers)
-    │   ├── frame_bronze_brilliant.png
-    │   ├── frame_bronze_heart.png
-    │   ├── frame_bronze_star.png
-    │   ├── frame_bronze_hexagon.png
-    │   ├── frame_bronze_octagon.png
-    │   ├── frame_bronze_pear.png
-    │   ├── frame_bronze_marquise.png
-    │   └── frame_bronze_cushion.png
+    ├── Seed Tier (0-4 transfers)
+    │   ├── frame_seed_brilliant.png
+    │   ├── frame_seed_heart.png
+    │   ├── frame_seed_star.png
+    │   ├── frame_seed_hexagon.png
+    │   ├── frame_seed_octagon.png
+    │   ├── frame_seed_pear.png
+    │   ├── frame_seed_marquise.png
+    │   ├── frame_seed_cushion.png
+    │   └── frame_seed_lightning.png
     │
-    ├── Silver Tier (5-29 transfers)
-    │   ├── frame_silver_brilliant.png
-    │   ├── frame_silver_heart.png
-    │   ├── frame_silver_star.png
-    │   ├── frame_silver_hexagon.png
-    │   ├── frame_silver_octagon.png
-    │   ├── frame_silver_pear.png
-    │   ├── frame_silver_marquise.png
-    │   └── frame_silver_cushion.png
+    ├── Bloom Tier (5-14 transfers)
+    │   ├── frame_bloom_brilliant.png
+    │   ├── frame_bloom_heart.png
+    │   ├── frame_bloom_star.png
+    │   ├── frame_bloom_hexagon.png
+    │   ├── frame_bloom_octagon.png
+    │   ├── frame_bloom_pear.png
+    │   ├── frame_bloom_marquise.png
+    │   ├── frame_bloom_cushion.png
+    │   └── frame_bloom_lightning.png
     │
-    └── Gold Tier (30+ transfers)
-        ├── frame_gold_brilliant.png
-        ├── frame_gold_heart.png
-        ├── frame_gold_star.png
-        ├── frame_gold_hexagon.png
-        ├── frame_gold_octagon.png
-        ├── frame_gold_pear.png
-        ├── frame_gold_marquise.png
-        └── frame_gold_cushion.png
+    ├── Legacy Tier (15-29 transfers)
+    │   ├── frame_legacy_brilliant.png
+    │   ├── frame_legacy_heart.png
+    │   ├── frame_legacy_star.png
+    │   ├── frame_legacy_hexagon.png
+    │   ├── frame_legacy_octagon.png
+    │   ├── frame_legacy_pear.png
+    │   ├── frame_legacy_marquise.png
+    │   ├── frame_legacy_cushion.png
+    │   └── frame_legacy_lightning.png
+    │
+    └── Radiance Tier (30+ transfers)
+        ├── frame_radiance_brilliant.png
+        ├── frame_radiance_heart.png
+        ├── frame_radiance_star.png
+        ├── frame_radiance_hexagon.png
+        ├── frame_radiance_octagon.png
+        ├── frame_radiance_pear.png
+        ├── frame_radiance_marquise.png
+        ├── frame_radiance_cushion.png
+        └── frame_radiance_lightning.png
 ```
 
 ---
@@ -56,21 +77,34 @@ FavoriumFantasyProduction/
 
 ```swift
 enum GemShape: String {
-    case brilliant    // → "gem_brilliant"
-    case heart        // → "gem_heart"
-    case star         // → "gem_star"
-    case hexagon      // → "gem_hexagon"
-    case octagon      // → "gem_octagon"
-    case pear         // → "gem_pear"
-    case marquise     // → "gem_marquise"
-    case cushion      // → "gem_cushion"
+    case brilliant    // → "gem_brilliant" (all tiers)
+    case heart        // → "gem_heart" (all tiers)
+    case star         // → "gem_star" (all tiers)
+    case hexagon      // → "gem_hexagon" (all tiers)
+    case octagon      // → "gem_octagon" (all tiers)
+    case pear         // → "gem_pear" (all tiers)
+    case marquise     // → "gem_marquise" (all tiers)
+    case cushion      // → "gem_cushion" (all tiers)
+    case lightning    // → "gem_{tier}_lightning" (tier-specific!)
 }
 ```
 
 **Asset name construction:**
+
+Legacy System (8 shapes):
 ```swift
 private var gemAssetName: String {
-    "gem_\(shape.rawValue)"
+    "gem_\(shape.rawValue)"  // Single gem for all tiers
+}
+```
+
+Progressive System (Lightning):
+```swift
+private var gemAssetName: String {
+    if shape == .lightning {
+        return "gem_\(frameTier.rawValue)_lightning"  // Tier-specific gem!
+    }
+    return "gem_\(shape.rawValue)"
 }
 ```
 
@@ -78,9 +112,10 @@ private var gemAssetName: String {
 
 ```swift
 enum FrameTier: String {
-    case bronze    // 0-4 transfers   → "frame_bronze_*"
-    case silver    // 5-29 transfers  → "frame_silver_*"
-    case gold      // 30+ transfers   → "frame_gold_*"
+    case seed       // 0-4 transfers   → "frame_seed_*"
+    case bloom      // 5-14 transfers  → "frame_bloom_*"
+    case legacy     // 15-29 transfers → "frame_legacy_*"
+    case radiance   // 30+ transfers   → "frame_radiance_*"
 }
 ```
 
@@ -121,6 +156,9 @@ Automatic mapping in `GemShape.from(baseForm:)`:
 
 "cushion"      → .cushion
 
+"lightning"    → .lightning
+"bolt"         → .lightning  ✅ Alias
+
 // Unknown      → .brilliant  ✅ Fallback
 ```
 
@@ -131,13 +169,13 @@ Automatic mapping in `GemShape.from(baseForm:)`:
 Automatic mapping in `FrameTier.from(transferCount:)`:
 
 ```swift
-transferCount in 0..<5      → .bronze
-transferCount in 5..<30     → .silver
-transferCount in 30..<50    → .gold
-transferCount >= 50         → .gold
+transferCount in 0..<5      → .seed
+transferCount in 5..<15     → .bloom
+transferCount in 15..<30    → .legacy
+transferCount >= 30         → .radiance
 ```
 
-Matches the existing tier system in `DecorativeFrame` from `MagicalCrystalView.swift`.
+Matches the tier system with four distinct levels.
 
 ---
 
@@ -224,19 +262,19 @@ model.baseForm == "heart"
 // Step 2: Tier mapping
 model.transferCount == 35
 → FrameTier.from(transferCount: 35)
-→ FrameTier.gold  // (30+ transfers)
+→ FrameTier.radiance  // (30+ transfers)
 
 // Step 3: Asset names
 gemAssetName = "gem_heart"
-frameAssetName = "frame_gold_heart"
+frameAssetName = "frame_radiance_heart"
 
 // Step 4: Load from Assets.xcassets
-Image("gem_heart")        // ← Must exist in Assets.xcassets
-Image("frame_gold_heart") // ← Must exist in Assets.xcassets
+Image("gem_heart")              // ← Must exist in Assets.xcassets
+Image("frame_radiance_heart")   // ← Must exist in Assets.xcassets
 
 // Step 5: Tint with colors
 gemColor = Color(hue: model.primaryHue / 360.0, ...)
-frameColor = FrameTier.gold.defaultColor  // Gold: hue 0.15
+frameColor = FrameTier.radiance.defaultColor  // Radiance color
 
 // Step 6: Render
 FavorGemView displays the tinted, layered gem!
@@ -246,7 +284,16 @@ FavorGemView displays the tinted, layered gem!
 
 ## Asset Requirements Checklist
 
-For **each** of the 32 assets:
+For the **48 total assets** (12 gems + 36 frames):
+
+### Legacy System (32 assets)
+- 8 gem files (one per shape, used for all tiers)
+- 24 frame files (8 shapes × 3 legacy tiers: seed, bloom, legacy)
+
+### Progressive System - Lightning (16 assets)
+- 4 tier-specific gem files (gem_seed_lightning, gem_bloom_lightning, etc.)
+- 4 frame files (frame_seed_lightning, frame_bloom_lightning, etc.)
+- 8 radiance frames for legacy shapes (frame_radiance_brilliant, etc.)
 
 ✅ **File Format**: PNG
 ✅ **Dimensions**: 512 × 512 pixels (square)
@@ -281,8 +328,10 @@ With template mode:
 ### Examples
 
 ```
-gem_brilliant.png           ← Gemstone (no tier)
-frame_bronze_brilliant.png  ← Frame (includes tier)
+gem_brilliant.png              ← Gemstone (no tier)
+gem_lightning.png              ← Lightning gemstone
+frame_seed_brilliant.png       ← Frame (includes tier)
+frame_radiance_lightning.png   ← Lightning with Radiance frame
 ```
 
 ### Why This Matters
@@ -291,13 +340,13 @@ The code constructs asset names programmatically:
 
 ```swift
 // ✅ Correct
-"gem_\(shape.rawValue)"                    // gem_heart
-"frame_\(tier.rawValue)_\(shape.rawValue)" // frame_gold_heart
+"gem_\(shape.rawValue)"                    // gem_heart OR gem_lightning
+"frame_\(tier.rawValue)_\(shape.rawValue)" // frame_radiance_heart OR frame_bloom_lightning
 
 // ❌ Wrong (won't load)
 "gem-\(shape)"              // gem-heart (hyphen)
-"frame_\(shape)_\(tier)"    // frame_heart_gold (wrong order)
-"\(tier)_\(shape)_frame"    // gold_heart_frame (wrong order)
+"frame_\(shape)_\(tier)"    // frame_heart_radiance (wrong order)
+"\(tier)_\(shape)_frame"    // radiance_heart_frame (wrong order)
 ```
 
 ---
@@ -326,10 +375,10 @@ The code constructs asset names programmatically:
 ┌─────────────┬──────────┬─────────────────────┐
 │ Transfers   │ Tier     │ Frame Style         │
 ├─────────────┼──────────┼─────────────────────┤
-│ 0 - 4       │ Bronze   │ Simple border       │
-│ 5 - 29      │ Silver   │ + Decorative dots   │
-│ 30 - 49     │ Gold     │ + Wings/rays        │
-│ 50+         │ Gold     │ Same as 30-49       │
+│ 0 - 4       │ Seed     │ Simple border       │
+│ 5 - 14      │ Bloom    │ + Decorative dots   │
+│ 15 - 29     │ Legacy   │ + Enhanced detail   │
+│ 30+         │ Radiance │ + Wings/rays        │
 └─────────────┴──────────┴─────────────────────┘
 ```
 
@@ -360,12 +409,14 @@ Assets.xcassets/
 │   └── gem_marquise.png (→ Template Image)
 ├── gem_cushion
 │   └── gem_cushion.png (→ Template Image)
-├── frame_bronze_brilliant
-│   └── frame_bronze_brilliant.png (→ Template Image)
-├── frame_bronze_heart
-│   └── frame_bronze_heart.png (→ Template Image)
+├── gem_lightning
+│   └── gem_lightning.png (→ Template Image)
+├── frame_seed_brilliant
+│   └── frame_seed_brilliant.png (→ Template Image)
+├── frame_seed_heart
+│   └── frame_seed_heart.png (→ Template Image)
 │
-... (all 32 assets)
+... (all 45 assets: 9 gems × 1 + 9 shapes × 4 tiers)
 ```
 
 Each asset should show:
@@ -395,12 +446,17 @@ Each asset should show:
 After adding assets to Xcode:
 
 ```
-✅ All 32 files visible in Assets.xcassets
+✅ All 48 files visible in Assets.xcassets
+   - 8 legacy gem files (gem_brilliant, gem_heart, etc.)
+   - 4 progressive Lightning gem files (gem_seed_lightning, etc.)
+   - 36 frame files (all shapes × all tiers)
 ✅ Each asset name matches exactly (case-sensitive)
 ✅ "Render As: Template Image" set for ALL assets
 ✅ No compile errors when building
 ✅ FavorGemGallery preview shows colored gems (not gray)
 ✅ Frames align perfectly with gems (no offset/scaling issues)
+✅ Lightning gems evolve visually through tiers
+✅ Legacy gems display correctly with all tier frames
 ```
 
 ---

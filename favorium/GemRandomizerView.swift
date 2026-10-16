@@ -15,6 +15,7 @@ struct GemRandomizerView: View {
     @State private var favorites: [RandomGem] = []
     @State private var showingFavorites = false
     @State private var animateGeneration = false
+    @State private var frameLevel: Double = 2.0 // 0-3 for seed, bloom, legacy, radiance
     
     var body: some View {
         NavigationView {
@@ -35,16 +36,17 @@ struct GemRandomizerView: View {
                         // Current Gem Display
                         VStack(spacing: 12) {
                             // Gem - smaller for mobile
-                            AnimatedFavorGemView(
+                            FavorGemView(
                                 shape: currentGem.shape,
                                 gemColor: currentGem.color,
-                                frameTier: currentGem.tier,
+                                frameTier: selectedFrameTier,
                                 frameColor: currentGem.frameColor,
-                                size: 220
+                                size: 220,
+                                showGlow: false,
+                                showShimmer: false
                             )
                             .scaleEffect(animateGeneration ? 1.1 : 1.0)
                             .animation(.spring(response: 0.3, dampingFraction: 0.6), value: animateGeneration)
-                            .shadow(color: currentGem.color.opacity(0.6), radius: 30, y: 15)
                             .padding(.top, 20)
                             
                             // Info
@@ -53,12 +55,12 @@ struct GemRandomizerView: View {
                                     .font(.system(size: 26, weight: .bold, design: .rounded))
                                     .foregroundColor(.white)
                                 
-                                Text(currentGem.tier.displayName + " Frame")
+                                Text(selectedFrameTier.displayName + " Frame")
                                     .font(.subheadline)
                                     .foregroundColor(currentGem.frameColor)
                                 
                                 HStack(spacing: 16) {
-                                    Label("\(currentGem.transferCount)", systemImage: "arrow.triangle.swap")
+                                    Label("\(transferCountForLevel)", systemImage: "arrow.triangle.swap")
                                     Label("Hue \(Int(currentGem.hue))°", systemImage: "paintpalette")
                                 }
                                 .font(.caption)
@@ -66,6 +68,42 @@ struct GemRandomizerView: View {
                             }
                         }
                         .padding(.bottom, 10)
+                        
+                        // Frame Level Slider
+                        VStack(spacing: 8) {
+                            HStack {
+                                Image(systemName: "slider.horizontal.3")
+                                    .foregroundColor(.cyan)
+                                Text("Frame Level")
+                                    .font(.subheadline.bold())
+                                    .foregroundColor(.white)
+                                Spacer()
+                                Text(selectedFrameTier.displayName)
+                                    .font(.caption)
+                                    .foregroundColor(.cyan)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.cyan.opacity(0.2))
+                                    .cornerRadius(6)
+                            }
+                            
+                            HStack(spacing: 12) {
+                                Text("Seed")
+                                    .font(.caption2)
+                                    .foregroundColor(.white.opacity(0.6))
+                                
+                                Slider(value: $frameLevel, in: 0...3, step: 1)
+                                    .tint(.cyan)
+                                
+                                Text("Radiance")
+                                    .font(.caption2)
+                                    .foregroundColor(.white.opacity(0.6))
+                            }
+                        }
+                        .padding()
+                        .background(Color.white.opacity(0.1))
+                        .cornerRadius(12)
+                        .padding(.horizontal)
                         
                         // Stats - more compact
                         HStack(spacing: 12) {
@@ -152,6 +190,15 @@ struct GemRandomizerView: View {
                     }
                     .disabled(favorites.isEmpty)
                 }
+                
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: { 
+                        frameLevel = 3.0  // Jump to radiance
+                    }) {
+                        Image(systemName: "sparkles")
+                            .foregroundColor(.cyan)
+                    }
+                }
             }
             .sheet(isPresented: $showingFavorites) {
                 FavoritesView(
@@ -162,6 +209,28 @@ struct GemRandomizerView: View {
                     }
                 )
             }
+        }
+    }
+    
+    // Computed property to get the frame tier based on slider level
+    private var selectedFrameTier: FrameTier {
+        switch Int(frameLevel) {
+        case 0: return .seed
+        case 1: return .bloom
+        case 2: return .legacy
+        case 3: return .radiance
+        default: return .legacy
+        }
+    }
+    
+    // Computed property to show appropriate transfer count for the level
+    private var transferCountForLevel: Int {
+        switch Int(frameLevel) {
+        case 0: return 2      // Seed: 0-4
+        case 1: return 8      // Bloom: 5-14
+        case 2: return 20     // Legacy: 15-29
+        case 3: return 40     // Radiance: 30+
+        default: return 20
         }
     }
     
@@ -177,9 +246,22 @@ struct GemRandomizerView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             currentGem = RandomGem.generate()
             
+            // Sync the frame level slider with the generated gem's tier
+            frameLevel = Double(tierToLevel(currentGem.tier))
+            
             withAnimation {
                 animateGeneration = false
             }
+        }
+    }
+    
+    // Helper to convert tier to slider level
+    private func tierToLevel(_ tier: FrameTier) -> Int {
+        switch tier {
+        case .seed: return 0
+        case .bloom: return 1
+        case .legacy: return 2
+        case .radiance: return 3
         }
     }
     
@@ -238,8 +320,17 @@ struct RandomGem: Identifiable {
             // Analogous
             frameHue = (hue + Double.random(in: 20...60)).truncatingRemainder(dividingBy: 360)
         } else {
-            // Use tier default
-            frameHue = tier == .bronze ? 28 : tier == .silver ? 0 : 54
+            // Use tier default based on actual tiers
+            switch tier {
+            case .seed:
+                frameHue = 28  // Bronze-ish
+            case .bloom:
+                frameHue = 0   // Silver-ish
+            case .legacy:
+                frameHue = 54  // Gold-ish
+            case .radiance:
+                frameHue = 54  // Gold-ish
+            }
         }
         
         return RandomGem(
@@ -374,7 +465,7 @@ struct FavoriteGemCard: View {
                 frameTier: gem.tier,
                 frameColor: gem.frameColor,
                 size: 140,
-                showGlow: true,
+                showGlow: false,
                 showShimmer: false
             )
             
@@ -518,14 +609,15 @@ struct GemDetailView: View {
                 VStack(spacing: 30) {
                     Spacer()
                     
-                    AnimatedFavorGemView(
+                    FavorGemView(
                         shape: gem.shape,
                         gemColor: gem.color,
                         frameTier: gem.tier,
                         frameColor: gem.frameColor,
-                        size: 320
+                        size: 320,
+                        showGlow: false,
+                        showShimmer: false
                     )
-                    .shadow(color: gem.color.opacity(0.6), radius: 50, y: 30)
                     
                     VStack(spacing: 16) {
                         Text(gem.shape.displayName)
@@ -605,7 +697,7 @@ struct ShapeSpecificGeneratorView: View {
                                 frameTier: gem.tier,
                                 frameColor: gem.frameColor,
                                 size: 140,
-                                showGlow: true,
+                                showGlow: false,
                                 showShimmer: false
                             )
                             
@@ -691,7 +783,7 @@ struct ShapeExplorerView: View {
                                 FavorGemView(
                                     shape: shape,
                                     gemColor: .cyan,
-                                    frameTier: .silver,
+                                    frameTier: .seed,
                                     size: 50,
                                     showGlow: false,
                                     showShimmer: false
@@ -726,3 +818,87 @@ struct ShapeExplorerView: View {
 #Preview("Testing Hub") {
     GemTestingHub()
 }
+
+#Preview("Lightning Shape Test") {
+    ZStack {
+        Color.black.ignoresSafeArea()
+        
+        VStack(spacing: 40) {
+            Text("Lightning Shape Test")
+                .font(.title.bold())
+                .foregroundColor(.white)
+            
+            Text("Lightning gem with all 4 frame tiers")
+                .foregroundColor(.gray)
+                .font(.caption)
+            
+            // Test Lightning shape with different frame tiers
+            HStack(spacing: 20) {
+                VStack(spacing: 8) {
+                    FavorGemView(
+                        shape: .lightning,
+                        gemColor: .cyan,
+                        frameTier: .seed,
+                        size: 140,
+                        showGlow: false,
+                        showShimmer: false
+                    )
+                    Text("Seed")
+                        .foregroundColor(.white)
+                        .font(.caption)
+                }
+                
+                VStack(spacing: 8) {
+                    FavorGemView(
+                        shape: .lightning,
+                        gemColor: .cyan,
+                        frameTier: .bloom,
+                        size: 140,
+                        showGlow: false,
+                        showShimmer: false
+                    )
+                    Text("Bloom")
+                        .foregroundColor(.white)
+                        .font(.caption)
+                }
+            }
+            
+            HStack(spacing: 20) {
+                VStack(spacing: 8) {
+                    FavorGemView(
+                        shape: .lightning,
+                        gemColor: .cyan,
+                        frameTier: .legacy,
+                        size: 140,
+                        showGlow: false,
+                        showShimmer: false
+                    )
+                    Text("Legacy")
+                        .foregroundColor(.white)
+                        .font(.caption)
+                }
+                
+                VStack(spacing: 8) {
+                    FavorGemView(
+                        shape: .lightning,
+                        gemColor: .cyan,
+                        frameTier: .radiance,
+                        size: 140,
+                        showGlow: false,
+                        showShimmer: false
+                    )
+                    Text("Radiance")
+                        .foregroundColor(.white)
+                        .font(.caption)
+                }
+            }
+            
+            Text("Asset names:\ngem_lightning\nframe_seed_lightning\nframe_bloom_lightning\nframe_legacy_lightning\nframe_radiance_lightning")
+                .foregroundColor(.gray)
+                .font(.caption)
+                .multilineTextAlignment(.center)
+                .padding()
+        }
+    }
+}
+

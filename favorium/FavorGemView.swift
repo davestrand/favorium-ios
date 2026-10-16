@@ -10,7 +10,11 @@ import SwiftUI
 
 // MARK: - Enums
 
-/// Eight gemstone shapes matching the asset files
+/// Nine gemstone shapes matching the asset files
+/// 
+/// Asset System:
+/// - **Lightning**: Uses tier-specific gems (gem_seed_lightning, gem_bloom_lightning, etc.)
+/// - **Other shapes**: Use single gem asset per shape (gem_heart, gem_brilliant, etc.)
 enum GemShape: String, CaseIterable, Identifiable {
     case brilliant
     case heart
@@ -20,6 +24,7 @@ enum GemShape: String, CaseIterable, Identifiable {
     case pear
     case marquise
     case cushion
+    case lightning  // New progressive gem shape with tier-specific assets
     
     var id: String { rawValue }
     
@@ -47,17 +52,20 @@ enum GemShape: String, CaseIterable, Identifiable {
             return .marquise
         case "cushion":
             return .cushion
+        case "lightning", "bolt":
+            return .lightning
         default:
             return .brilliant // fallback
         }
     }
 }
 
-/// Three frame tiers matching asset complexity levels
+/// Frame tiers matching asset complexity levels
 enum FrameTier: String, CaseIterable, Identifiable {
-    case bronze
-    case silver
-    case gold
+    case seed       // Starting tier (0-4 transfers)
+    case bloom      // Growing tier (5-14 transfers)
+    case legacy     // Established tier (15-29 transfers)
+    case radiance   // Maximum tier (30+ transfers)
     
     var id: String { rawValue }
     
@@ -69,26 +77,38 @@ enum FrameTier: String, CaseIterable, Identifiable {
     static func from(transferCount: Int) -> FrameTier {
         switch transferCount {
         case 0..<5:
-            return .bronze
-        case 5..<30:
-            return .silver
-        case 30..<50:
-            return .gold
+            return .seed
+        case 5..<15:
+            return .bloom
+        case 15..<30:
+            return .legacy
         default:
-            return .gold
+            return .radiance
         }
     }
     
-    /// Suggested metallic frame color
+    /// Suggested frame color based on tier theme
     var defaultColor: Color {
         switch self {
-        case .bronze:
-            return Color(hue: 0.08, saturation: 0.6, brightness: 0.7)
-        case .silver:
-            return Color(hue: 0.0, saturation: 0.0, brightness: 0.8)
-        case .gold:
-            return Color(hue: 0.15, saturation: 0.8, brightness: 1.0)
+        case .seed:
+            // Fresh green/brown earth tones
+            return Color(hue: 0.28, saturation: 0.5, brightness: 0.6)
+        case .bloom:
+            // Vibrant flowering colors
+            return Color(hue: 0.55, saturation: 0.7, brightness: 0.85)
+        case .legacy:
+            // Rich gold/amber tones
+            return Color(hue: 0.12, saturation: 0.8, brightness: 0.9)
+        case .radiance:
+            // Brilliant white/platinum
+            return Color(hue: 0.15, saturation: 0.15, brightness: 1.0)
         }
+    }
+    
+    /// Asset name mapping
+    var assetName: String {
+        // All tiers now use their proper names
+        return rawValue
     }
 }
 
@@ -111,7 +131,7 @@ struct FavorGemView: View {
         frameTier: FrameTier,
         frameColor: Color? = nil,
         size: CGFloat = 200,
-        showGlow: Bool = true,
+        showGlow: Bool = false,
         showShimmer: Bool = false
     ) {
         self.shape = shape
@@ -128,7 +148,7 @@ struct FavorGemView: View {
         model: CrystalModel,
         size: CGFloat = 200,
         customFrameColor: Color? = nil,
-        showGlow: Bool = true,
+        showGlow: Bool = false,
         showShimmer: Bool = false
     ) {
         self.shape = GemShape.from(baseForm: model.baseForm)
@@ -169,39 +189,60 @@ struct FavorGemView: View {
     
     private var backgroundGlow: some View {
         ZStack {
-            // Outer soft glow
+            // Outer frame color glow (metallic aura)
             Circle()
                 .fill(
                     RadialGradient(
                         colors: [
-                            gemColor.opacity(0.25),
-                            gemColor.opacity(0.12),
+                            resolvedFrameColor.opacity(0.3),
+                            resolvedFrameColor.opacity(0.15),
                             Color.clear
                         ],
                         center: .center,
-                        startRadius: 0,
-                        endRadius: size * 0.6
+                        startRadius: size * 0.3,
+                        endRadius: size * 0.7
                     )
                 )
-                .frame(width: size * 1.4, height: size * 1.4)
-                .blur(radius: size * 0.2)
+                .frame(width: size * 1.6, height: size * 1.6)
+                .blur(radius: size * 0.25)
             
-            // Inner intense glow
+            // Middle transition glow (blend of both)
             Circle()
                 .fill(
                     RadialGradient(
                         colors: [
-                            gemColor.opacity(0.5),
-                            gemColor.opacity(0.3),
+                            gemColor.opacity(0.35),
+                            Color(
+                                red: (gemColor.components.red + resolvedFrameColor.components.red) / 2,
+                                green: (gemColor.components.green + resolvedFrameColor.components.green) / 2,
+                                blue: (gemColor.components.blue + resolvedFrameColor.components.blue) / 2
+                            ).opacity(0.2),
                             Color.clear
                         ],
                         center: .center,
-                        startRadius: 0,
-                        endRadius: size * 0.4
+                        startRadius: size * 0.15,
+                        endRadius: size * 0.5
                     )
                 )
-                .frame(width: size * 0.9, height: size * 0.9)
-                .blur(radius: size * 0.1)
+                .frame(width: size * 1.1, height: size * 1.1)
+                .blur(radius: size * 0.15)
+            
+            // Inner gem color glow (core radiance)
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            gemColor.opacity(0.6),
+                            gemColor.opacity(0.4),
+                            gemColor.opacity(0.1)
+                        ],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: size * 0.35
+                    )
+                )
+                .frame(width: size * 0.8, height: size * 0.8)
+                .blur(radius: size * 0.08)
         }
     }
     
@@ -303,35 +344,71 @@ struct FavorGemView: View {
             // Subtle glow from frame picking up gem color
             Image(frameAssetName)
                 .resizable()
-                .renderingMode(.template)
-                .foregroundColor(gemColor)
-                .frame(width: size * 1.02, height: size * 1.02)
+                .frame(width: size * 1.05, height: size * 1.05)
                 .aspectRatio(contentMode: .fit)
-                .blur(radius: 4)
+                .colorMultiply(gemColor)
+                .blur(radius: 6)
+                .opacity(0.4)
+            
+            // Base frame with shadow for depth
+            Image(frameAssetName)
+                .resizable()
+                .frame(width: size, height: size)
+                .aspectRatio(contentMode: .fit)
+                .colorMultiply(.black)
                 .opacity(0.3)
+                .blur(radius: 2)
+                .offset(y: size * 0.015)
             
-            // Main frame
+            // Main frame colored layer (preserving detail)
             Image(frameAssetName)
                 .resizable()
-                .renderingMode(.template)
-                .foregroundColor(resolvedFrameColor)
                 .frame(width: size, height: size)
                 .aspectRatio(contentMode: .fit)
+                .colorMultiply(resolvedFrameColor)
+                .brightness(-0.1) // Slightly darker base
+                .saturation(1.1)
             
-            // Highlight on frame edges
+            // Mid-tone highlights for dimension
             Image(frameAssetName)
                 .resizable()
-                .renderingMode(.template)
-                .foregroundColor(.white)
                 .frame(width: size, height: size)
                 .aspectRatio(contentMode: .fit)
+                .colorMultiply(resolvedFrameColor)
+                .brightness(0.15)
+                .blendMode(.lighten)
+                .opacity(0.7)
+            
+            // Metallic specular highlights
+            Image(frameAssetName)
+                .resizable()
+                .frame(width: size, height: size)
+                .aspectRatio(contentMode: .fit)
+                .colorMultiply(.white)
                 .blendMode(.screen)
-                .opacity(0.2)
+                .opacity(0.5)
                 .mask(
                     LinearGradient(
-                        colors: [.white.opacity(0.6), .clear],
-                        startPoint: .top,
-                        endPoint: .center
+                        colors: [.white, .white.opacity(0.4), .clear],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+            
+            // Sharp highlight points (for ornate details)
+            Image(frameAssetName)
+                .resizable()
+                .frame(width: size, height: size)
+                .aspectRatio(contentMode: .fit)
+                .colorMultiply(.white)
+                .blendMode(.screen)
+                .opacity(0.6)
+                .mask(
+                    RadialGradient(
+                        colors: [.white, .clear],
+                        center: UnitPoint(x: 0.3, y: 0.2),
+                        startRadius: 0,
+                        endRadius: size * 0.25
                     )
                 )
         }
@@ -373,11 +450,16 @@ struct FavorGemView: View {
     // MARK: - Asset Name Helpers
     
     private var gemAssetName: String {
-        "gem_\(shape.rawValue)"
+        // Lightning uses tier-specific gems (new system)
+        if shape == .lightning {
+            return "gem_\(frameTier.rawValue)_lightning"
+        }
+        // Other shapes use single gem asset (legacy system)
+        return "gem_\(shape.rawValue)"
     }
     
     private var frameAssetName: String {
-        "frame_\(frameTier.rawValue)_\(shape.rawValue)"
+        "frame_\(frameTier.assetName)_\(shape.rawValue)"
     }
     
     private var resolvedFrameColor: Color {
@@ -476,7 +558,7 @@ struct AnimatedFavorGemView: View {
 /// Preview gallery showing all gem shapes and frame tiers
 struct FavorGemGallery: View {
     @State private var selectedShape: GemShape = .brilliant
-    @State private var selectedTier: FrameTier = .gold
+    @State private var selectedTier: FrameTier = .legacy
     @State private var primaryHue: Double = 200
     @State private var saturation: Double = 0.8
     @State private var frameHue: Double = 50
@@ -771,6 +853,27 @@ extension Color {
         // In production, you might want a more accurate UIColor/NSColor conversion
         return 0.5 // Fallback for now, but will work with the truncatingRemainder
     }
+    
+    /// RGB components for color blending
+    var components: (red: Double, green: Double, blue: Double) {
+        #if canImport(UIKit)
+        let uiColor = UIColor(self)
+        var r: CGFloat = 0
+        var g: CGFloat = 0
+        var b: CGFloat = 0
+        var a: CGFloat = 0
+        uiColor.getRed(&r, green: &g, blue: &b, alpha: &a)
+        return (Double(r), Double(g), Double(b))
+        #elseif canImport(AppKit)
+        let nsColor = NSColor(self)
+        guard let rgbColor = nsColor.usingColorSpace(.deviceRGB) else {
+            return (0.5, 0.5, 0.5) // Fallback
+        }
+        return (Double(rgbColor.redComponent), Double(rgbColor.greenComponent), Double(rgbColor.blueComponent))
+        #else
+        return (0.5, 0.5, 0.5) // Fallback
+        #endif
+    }
 }
 
 // MARK: - Shape Path Helpers
@@ -797,11 +900,167 @@ extension GemShape {
             MarquiseShape()
         case .cushion:
             CushionShape()
+        case .lightning:
+            LightningBoltShape()
         }
     }
 }
 
+// MARK: - Lightning Shape Definition
+// Note: Other shapes are defined in MagicalCrystalView.swift
+
+struct LightningBoltShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let w = rect.width
+        let h = rect.height
+        
+        // Lightning bolt zigzag pattern
+        path.move(to: CGPoint(x: w * 0.6, y: 0))
+        path.addLine(to: CGPoint(x: w * 0.35, y: h * 0.4))
+        path.addLine(to: CGPoint(x: w * 0.55, y: h * 0.4))
+        path.addLine(to: CGPoint(x: w * 0.25, y: h))
+        path.addLine(to: CGPoint(x: w * 0.5, y: h * 0.55))
+        path.addLine(to: CGPoint(x: w * 0.35, y: h * 0.55))
+        path.closeSubpath()
+        return path
+    }
+}
+
+// MARK: - Asset Verification
+
+/// Quick check to see which frame and gem assets are loaded
+struct FrameAssetVerificationView: View {
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Frame Assets Verification")
+                    .font(.title.bold())
+                    .padding()
+                
+                ForEach(FrameTier.allCases) { tier in
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("\(tier.displayName) Tier")
+                            .font(.headline)
+                            .foregroundColor(tier.defaultColor)
+                        
+                        LazyVGrid(columns: [
+                            GridItem(.flexible()),
+                            GridItem(.flexible()),
+                            GridItem(.flexible()),
+                            GridItem(.flexible())
+                        ], spacing: 12) {
+                            ForEach(GemShape.allCases) { shape in
+                                VStack(spacing: 4) {
+                                    // Lightning uses tier-specific gems
+                                    let gemAssetName = shape == .lightning 
+                                        ? "gem_\(tier.rawValue)_lightning"
+                                        : "gem_\(shape.rawValue)"
+                                    let frameAssetName = "frame_\(tier.rawValue)_\(shape.rawValue)"
+                                    
+                                    // Try to load the gem and frame
+                                    ZStack {
+                                        Image(gemAssetName)
+                                            .resizable()
+                                            .renderingMode(.template)
+                                            .foregroundColor(.cyan)
+                                            .frame(width: 50, height: 50)
+                                        
+                                        Image(frameAssetName)
+                                            .resizable()
+                                            .renderingMode(.template)
+                                            .foregroundColor(tier.defaultColor.opacity(0.7))
+                                            .frame(width: 60, height: 60)
+                                    }
+                                    .background(Color.gray.opacity(0.2))
+                                    .cornerRadius(8)
+                                    
+                                    Text(shape.rawValue)
+                                        .font(.caption2)
+                                    
+                                    // Check if both assets loaded
+                                    HStack(spacing: 4) {
+                                        if UIImage(named: gemAssetName) != nil {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .foregroundColor(.green)
+                                                .font(.caption2)
+                                        } else {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .foregroundColor(.red)
+                                                .font(.caption2)
+                                        }
+                                        
+                                        if UIImage(named: frameAssetName) != nil {
+                                            Image(systemName: "checkmark.square.fill")
+                                                .foregroundColor(.green)
+                                                .font(.caption2)
+                                        } else {
+                                            Image(systemName: "xmark.square.fill")
+                                                .foregroundColor(.red)
+                                                .font(.caption2)
+                                        }
+                                    }
+                                    
+                                    // Show asset names for Lightning (new system)
+                                    if shape == .lightning {
+                                        Text("G: \(gemAssetName)")
+                                            .font(.system(size: 8))
+                                            .foregroundColor(.cyan.opacity(0.7))
+                                            .lineLimit(1)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding()
+                    .background(Color.white.opacity(0.05))
+                    .cornerRadius(12)
+                }
+                .padding(.horizontal)
+                
+                // Legend
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Legend")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    
+                    HStack {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                        Text("= Gem asset loaded")
+                            .font(.caption)
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                    
+                    HStack {
+                        Image(systemName: "checkmark.square.fill")
+                            .foregroundColor(.green)
+                        Text("= Frame asset loaded")
+                            .font(.caption)
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                    
+                    Text("Lightning uses tier-specific gems (new system)")
+                        .font(.caption)
+                        .foregroundColor(.cyan)
+                        .padding(.top, 4)
+                }
+                .padding()
+                .background(Color.white.opacity(0.05))
+                .cornerRadius(12)
+                .padding(.horizontal)
+            }
+            .padding(.vertical)
+        }
+        .background(Color.black.ignoresSafeArea())
+    }
+}
+
 // MARK: - Previews
+
+#Preview("Asset Verification") {
+    FrameAssetVerificationView()
+}
 
 #Preview("Single Gem") {
     ZStack {
@@ -810,7 +1069,7 @@ extension GemShape {
         FavorGemView(
             shape: .heart,
             gemColor: .pink,
-            frameTier: .gold,
+            frameTier: .legacy,
             size: 280,
             showGlow: true,
             showShimmer: true
@@ -825,7 +1084,7 @@ extension GemShape {
         AnimatedFavorGemView(
             shape: .star,
             gemColor: .cyan,
-            frameTier: .silver,
+            frameTier: .bloom,
             size: 280
         )
     }
@@ -834,3 +1093,70 @@ extension GemShape {
 #Preview("Gallery") {
     FavorGemGallery()
 }
+#Preview("Lightning Progression") {
+    ZStack {
+        Color.black.ignoresSafeArea()
+        
+        VStack(spacing: 30) {
+            Text("Lightning Evolution System")
+                .font(.title.bold())
+                .foregroundColor(.white)
+            
+            Text("Each tier has its own unique Lightning gem")
+                .font(.subheadline)
+                .foregroundColor(.cyan)
+            
+            // Show all 4 tiers of Lightning
+            HStack(spacing: 20) {
+                ForEach(FrameTier.allCases) { tier in
+                    VStack(spacing: 12) {
+                        FavorGemView(
+                            shape: .lightning,
+                            gemColor: .cyan,
+                            frameTier: tier,
+                            size: 160,
+                            showGlow: true,
+                            showShimmer: false
+                        )
+                        
+                        VStack(spacing: 4) {
+                            Text(tier.displayName)
+                                .font(.headline)
+                                .foregroundColor(tier.defaultColor)
+                            
+                            Text("gem_\(tier.rawValue)_lightning")
+                                .font(.system(size: 10))
+                                .foregroundColor(.white.opacity(0.5))
+                        }
+                    }
+                }
+            }
+            .padding()
+            
+            Text("Assets Required:")
+                .font(.headline)
+                .foregroundColor(.white)
+                .padding(.top)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Group {
+                    Text("• gem_seed_lightning.png")
+                    Text("• gem_bloom_lightning.png")
+                    Text("• gem_legacy_lightning.png")
+                    Text("• gem_radiance_lightning.png")
+                    Text("• frame_seed_lightning.png")
+                    Text("• frame_bloom_lightning.png")
+                    Text("• frame_legacy_lightning.png")
+                    Text("• frame_radiance_lightning.png")
+                }
+                .font(.caption)
+                .foregroundColor(.cyan.opacity(0.8))
+            }
+            .padding()
+            .background(Color.white.opacity(0.05))
+            .cornerRadius(12)
+        }
+        .padding()
+    }
+}
+
