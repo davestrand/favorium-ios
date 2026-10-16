@@ -278,7 +278,7 @@ struct CrystalModel {
     let seed: String
     let phase: CrystalPhase
     let transferCount: Int
-    
+
     // Identity (immutable)
     let primaryHue: Double        // 0-360
     let secondaryHue: Double      // 0-360
@@ -287,18 +287,22 @@ struct CrystalModel {
     let baseForm: String
     let colorRelationship: ColorRelationship
     let secondaryInfluence: Double
-    
+
+    // Art families — nil means "use default fallback" in FavorGemView
+    let gemFamily: String?        // e.g. "lightning"
+    let frameFamily: String?      // e.g. "gothic"
+
     // Personality (immutable)
     let complexityBias: Double    // 0-1
     let orbitalAffinity: Double   // 0-1
     let refraction: Double        // 0-1
-    
+
     // Derived (changes with stage)
     let colorProfile: CrystalColorProfile
     let orbitals: [OrbitalConfig]
     let innerLightIntensity: Double
     let aura: Double
-    
+
     // Visual helpers
     var bodySecondaryMix: Double {
         clamp01(
@@ -369,6 +373,8 @@ struct CrystalEngine {
             baseForm: dna.identity.baseForm,
             colorRelationship: colorRelationship,
             secondaryInfluence: secondaryInfluence,
+            gemFamily: dna.identity.gemFamily,
+            frameFamily: dna.identity.frameFamily,
             complexityBias: dna.personality.complexityBias,
             orbitalAffinity: dna.personality.orbitalAffinity,
             refraction: dna.personality.refraction,
@@ -459,16 +465,18 @@ struct CrystalIdentity: Codable {
     let baseForm: String
     let colorRelationship: String?
     let secondaryInfluence: Double?
-    
+    let gemFamily: String?    // e.g. "lightning" — which gem art set to use
+    let frameFamily: String?  // e.g. "gothic"    — which frame art set to use
+
     var materialFamilyEnum: MaterialFamily {
         MaterialFamily(rawValue: materialFamily) ?? .coloredGemstone
     }
-    
+
     var colorRelationshipEnum: ColorRelationship {
         guard let rel = colorRelationship else { return .complementary }
         return ColorRelationship(rawValue: rel) ?? .complementary
     }
-    
+
     enum CodingKeys: String, CodingKey {
         case primaryHue = "primary_hue"
         case secondaryHue = "secondary_hue"
@@ -477,6 +485,8 @@ struct CrystalIdentity: Codable {
         case baseForm = "base_form"
         case colorRelationship = "color_relationship"
         case secondaryInfluence = "secondary_influence"
+        case gemFamily = "gem_family"
+        case frameFamily = "frame_family"
     }
 }
 
@@ -496,20 +506,6 @@ struct CrystalDNA: Codable {
     let identity: CrystalIdentity
     let personality: CrystalPersonality
     let seed: String
-    
-    // Fill in missing optional values with deterministic generation
-    var resolved: CrystalDNA {
-        var resolvedIdentity = identity
-        
-        // Generate missing relationship if needed
-        if identity.colorRelationship == nil {
-            var rng = CrystalRng(seed: seed, salt: "color-relationship")
-            let relationship = rng.pick(ColorRelationship.allCases)
-            // Note: Can't mutate, would need to reconstruct
-        }
-        
-        return self
-    }
 }
 
 // MARK: - Utilities

@@ -11,49 +11,54 @@ import SwiftUI
 // MARK: - Asset Verification System
 
 struct AssetVerification {
-    
-    /// Check if a specific asset exists and can be loaded
+
+    /// Check if a specific asset exists in the bundle.
     static func assetExists(_ name: String) -> Bool {
         UIImage(named: name) != nil
     }
-    
-    /// Verify all gem assets
+
+    /// Verify all gem assets across every family and tier.
     static func verifyGems() -> [String: Bool] {
         var results: [String: Bool] = [:]
-        for shape in GemShape.allCases {
-            let assetName = "gem_\(shape.rawValue)"
-            results[assetName] = assetExists(assetName)
-        }
-        return results
-    }
-    
-    /// Verify all frame assets
-    static func verifyFrames() -> [String: Bool] {
-        var results: [String: Bool] = [:]
-        for tier in FrameTier.allCases {
-            for shape in GemShape.allCases {
-                let assetName = "frame_\(tier.rawValue)_\(shape.rawValue)"
-                results[assetName] = assetExists(assetName)
+        for family in GemFamily.allCases {
+            for tier in Tier.allCases {
+                let name = family.assetName(tier: tier)
+                results[name] = assetExists(name)
             }
         }
         return results
     }
-    
-    /// Verify all assets at once
+
+    /// Verify all frame assets across every family and tier.
+    static func verifyFrames() -> [String: Bool] {
+        var results: [String: Bool] = [:]
+        for family in FrameFamily.allCases {
+            for tier in Tier.allCases {
+                let name = family.assetName(tier: tier)
+                results[name] = assetExists(name)
+            }
+        }
+        return results
+    }
+
+    /// Total number of assets expected given current families.
+    static var expectedCount: Int {
+        GemFamily.allCases.count * Tier.allCases.count +
+        FrameFamily.allCases.count * Tier.allCases.count
+    }
+
+    /// Verify all assets at once.
     static func verifyAll() -> AssetVerificationResult {
-        let gems = verifyGems()
+        let gems   = verifyGems()
         let frames = verifyFrames()
-        
-        let allAssets = gems.merging(frames) { (_, new) in new }
-        let missingAssets = allAssets.filter { !$0.value }.map { $0.key }.sorted()
-        let foundAssets = allAssets.filter { $0.value }.map { $0.key }.sorted()
-        
+        let all    = gems.merging(frames) { _, new in new }
+
         return AssetVerificationResult(
-            totalExpected: 32,
-            totalFound: foundAssets.count,
-            totalMissing: missingAssets.count,
-            foundAssets: foundAssets,
-            missingAssets: missingAssets,
+            totalExpected: expectedCount,
+            totalFound: all.values.filter { $0 }.count,
+            totalMissing: all.values.filter { !$0 }.count,
+            foundAssets: all.filter { $0.value }.map(\.key).sorted(),
+            missingAssets: all.filter { !$0.value }.map(\.key).sorted(),
             gemResults: gems,
             frameResults: frames
         )
@@ -158,16 +163,18 @@ struct AssetVerificationView: View {
                     
                     // Gemstone verification
                     AssetCategorySection(
-                        title: "Gemstones (8 expected)",
+                        title: "Gems (\(GemFamily.allCases.count * Tier.allCases.count) expected)",
                         results: result.gemResults
                     )
-                    
-                    // Frame verification by tier
-                    ForEach(FrameTier.allCases) { tier in
-                        let tierResults = result.frameResults.filter { $0.key.contains("_\(tier.rawValue)_") }
+
+                    // Frame verification by family
+                    ForEach(FrameFamily.allCases) { family in
+                        let familyResults = result.frameResults.filter {
+                            $0.key.hasPrefix("frame_\(family.rawValue)_")
+                        }
                         AssetCategorySection(
-                            title: "\(tier.displayName) Frames (8 expected)",
-                            results: tierResults
+                            title: "\(family.displayName) Frames (\(Tier.allCases.count) expected)",
+                            results: familyResults
                         )
                     }
                     

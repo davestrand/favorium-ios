@@ -11,50 +11,47 @@ import SwiftUI
 // MARK: - CrystalModel Extensions
 
 extension CrystalModel {
-    
-    /// The asset-based gem shape for this crystal
-    var assetGemShape: GemShape {
-        GemShape.from(baseForm: baseForm)
+
+    /// The resolved gem family for asset rendering.
+    var assetGemFamily: GemFamily {
+        GemFamily.from(gemFamily)
     }
-    
-    /// The asset-based frame tier for this crystal
-    var assetFrameTier: FrameTier {
-        FrameTier.from(transferCount: transferCount)
+
+    /// The resolved frame family for asset rendering.
+    var assetFrameFamily: FrameFamily {
+        FrameFamily.from(frameFamily)
     }
-    
-    /// Primary color as SwiftUI Color
+
+    /// The progression tier derived from transfer count.
+    var assetTier: Tier {
+        Tier.from(transferCount: transferCount)
+    }
+
+    /// Primary color as SwiftUI Color.
     var primarySwiftUIColor: Color {
         Color(hue: primaryHue / 360.0, saturation: saturation, brightness: 0.9)
     }
-    
-    /// Secondary color as SwiftUI Color
+
+    /// Secondary color as SwiftUI Color.
     var secondarySwiftUIColor: Color {
         Color(hue: secondaryHue / 360.0, saturation: saturation, brightness: 0.85)
     }
-    
-    /// Suggested frame color based on material family and phase
+
+    /// Suggested frame tint color based on material family.
+    /// Falls back to the tier's default color when no special treatment is needed.
     var suggestedFrameColor: Color {
-        // Base color on tier
-        let tierColor = assetFrameTier.defaultColor
-        
-        // Optionally tint based on material family
+        let tierColor = assetTier.defaultColor
+
         switch materialFamily {
         case .metallic:
-            // Keep default metallic colors
             return tierColor
-            
+
         case .cosmic, .spectral:
-            // Tint frames with gem color for cosmic/spectral crystals
-            return Color(
-                hue: primaryHue / 360.0,
-                saturation: 0.3,
-                brightness: 0.7
-            )
-            
+            return Color(hue: primaryHue / 360.0, saturation: 0.3, brightness: 0.7)
+
         case .opal, .moonstone:
-            // Silvery/pearlescent frames
             return Color(hue: 0.6, saturation: 0.1, brightness: 0.85)
-            
+
         default:
             return tierColor
         }
@@ -64,61 +61,43 @@ extension CrystalModel {
 // MARK: - Quick Factory Methods
 
 extension FavorGemView {
-    
-    /// Create a gem view optimized for list items
+
+    /// Optimized for list rows — no effects for performance.
     static func listItem(model: CrystalModel, size: CGFloat = 50) -> some View {
-        FavorGemView(
-            model: model,
-            size: size,
-            showGlow: false,      // Disable for performance
-            showShimmer: false    // Disable for performance
-        )
+        FavorGemView(model: model, size: size, showGlow: false, showShimmer: false)
     }
-    
-    /// Create a gem view optimized for grid display
+
+    /// Optimized for grid cells — glow on, shimmer off.
     static func gridItem(model: CrystalModel, size: CGFloat = 100) -> some View {
-        FavorGemView(
-            model: model,
-            size: size,
-            showGlow: true,
-            showShimmer: false
-        )
+        FavorGemView(model: model, size: size, showGlow: true, showShimmer: false)
     }
-    
-    /// Create a gem view optimized for card display
+
+    /// Optimized for card display — all effects on.
     static func card(model: CrystalModel, size: CGFloat = 160) -> some View {
-        FavorGemView(
-            model: model,
-            size: size,
-            showGlow: true,
-            showShimmer: true
-        )
+        FavorGemView(model: model, size: size, showGlow: true, showShimmer: true)
     }
-    
-    /// Create a hero gem view (large, animated)
+
+    /// Large animated hero gem.
     static func hero(model: CrystalModel, size: CGFloat = 320) -> some View {
-        AnimatedFavorGemView(
-            model: model,
-            size: size
-        )
+        AnimatedFavorGemView(model: model, size: size)
     }
 }
 
 // MARK: - Rendering Mode Selection
 
 enum GemRenderingMode {
-    case asset           // Use FavorGemView
-    case procedural      // Use MagicalCrystalView
-    case auto           // Choose based on context
+    case asset       // Use FavorGemView
+    case procedural  // Use MagicalCrystalView
+    case auto        // Choose based on context
 }
 
-/// Smart wrapper that chooses between asset and procedural rendering
+/// Smart wrapper that chooses between asset and procedural rendering.
 struct AdaptiveGemView: View {
     let model: CrystalModel
     let size: CGFloat
     let mode: GemRenderingMode
     let forceAnimated: Bool
-    
+
     init(
         model: CrystalModel,
         size: CGFloat = 200,
@@ -130,7 +109,7 @@ struct AdaptiveGemView: View {
         self.mode = mode
         self.forceAnimated = animated
     }
-    
+
     var body: some View {
         Group {
             switch resolvedMode {
@@ -143,38 +122,22 @@ struct AdaptiveGemView: View {
             case .procedural:
                 MagicalCrystalView(model: model, size: size)
             case .auto:
-                // Should never reach here due to resolvedMode logic
                 FavorGemView(model: model, size: size)
             }
         }
     }
-    
+
     private var resolvedMode: GemRenderingMode {
         switch mode {
-        case .asset, .procedural:
-            return mode
-        case .auto:
-            return autoSelectMode
+        case .asset, .procedural: return mode
+        case .auto: return autoSelectMode
         }
     }
-    
+
     private var autoSelectMode: GemRenderingMode {
-        // Use asset-based for small sizes (performance)
-        if size < 100 {
-            return .asset
-        }
-        
-        // Use procedural for legendary crystals with special effects
-        if model.transferCount >= 50 {
-            return .procedural
-        }
-        
-        // Use asset-based for medium sizes
-        if size < 250 {
-            return .asset
-        }
-        
-        // Use procedural for hero displays
+        if size < 100       { return .asset }
+        if model.transferCount >= 50 { return .procedural }
+        if size < 250       { return .asset }
         return .procedural
     }
 }
@@ -182,36 +145,36 @@ struct AdaptiveGemView: View {
 // MARK: - Batch Conversion Helpers
 
 extension Array where Element == CrystalModel {
-    
-    /// Convert all models to asset gem views
+
+    /// Convert all models to asset gem views.
     func asGemViews(size: CGFloat = 100) -> [AnyView] {
-        self.map { model in
-            AnyView(FavorGemView(model: model, size: size))
-        }
+        map { AnyView(FavorGemView(model: $0, size: size)) }
     }
-    
-    /// Group by frame tier
-    func groupedByFrameTier() -> [FrameTier: [CrystalModel]] {
-        Dictionary(grouping: self) { model in
-            model.assetFrameTier
-        }
+
+    /// Group models by their resolved tier.
+    func groupedByTier() -> [Tier: [CrystalModel]] {
+        Dictionary(grouping: self) { $0.assetTier }
     }
-    
-    /// Group by gem shape
-    func groupedByShape() -> [GemShape: [CrystalModel]] {
-        Dictionary(grouping: self) { model in
-            model.assetGemShape
-        }
+
+    /// Group models by their gem family.
+    func groupedByGemFamily() -> [GemFamily: [CrystalModel]] {
+        Dictionary(grouping: self) { $0.assetGemFamily }
+    }
+
+    /// Group models by their frame family.
+    func groupedByFrameFamily() -> [FrameFamily: [CrystalModel]] {
+        Dictionary(grouping: self) { $0.assetFrameFamily }
     }
 }
 
 // MARK: - Preview Helpers
 
 extension CrystalModel {
-    
-    /// Create a test model with specific characteristics
+
+    /// Create a test model with specific characteristics.
     static func preview(
-        shape: GemShape = .brilliant,
+        gemFamily: GemFamily = .lightning,
+        frameFamily: FrameFamily = .lightning,
         hue: Double = 200,
         transferCount: Int = 15
     ) -> CrystalModel {
@@ -221,9 +184,11 @@ extension CrystalModel {
                 secondaryHue: (hue + 30).truncatingRemainder(dividingBy: 360),
                 saturation: 0.8,
                 materialFamily: "coloredGemstone",
-                baseForm: shape.rawValue,
+                baseForm: gemFamily.rawValue,
                 colorRelationship: "complementary",
-                secondaryInfluence: 0.5
+                secondaryInfluence: 0.5,
+                gemFamily: gemFamily.rawValue,
+                frameFamily: frameFamily.rawValue
             ),
             personality: CrystalPersonality(
                 complexityBias: 0.7,
@@ -232,21 +197,18 @@ extension CrystalModel {
             ),
             seed: UUID().uuidString
         )
-        
         return CrystalEngine.derive(dna: dna, transferCount: transferCount)
     }
-    
-    /// Create a collection of preview models with varied characteristics
+
+    /// A varied collection of preview models across all tiers.
     static var previewCollection: [CrystalModel] {
         [
-            preview(shape: .brilliant, hue: 0, transferCount: 5),
-            preview(shape: .heart, hue: 330, transferCount: 15),
-            preview(shape: .star, hue: 60, transferCount: 25),
-            preview(shape: .hexagon, hue: 120, transferCount: 35),
-            preview(shape: .octagon, hue: 180, transferCount: 45),
-            preview(shape: .pear, hue: 240, transferCount: 55),
-            preview(shape: .marquise, hue: 270, transferCount: 10),
-            preview(shape: .cushion, hue: 300, transferCount: 20)
+            preview(hue: 0,   transferCount: 2),   // seed
+            preview(hue: 40,  transferCount: 8),   // bloom
+            preview(hue: 120, transferCount: 20),  // legacy
+            preview(hue: 200, transferCount: 35),  // radiance
+            preview(hue: 260, transferCount: 5),   // bloom
+            preview(hue: 300, transferCount: 15),  // legacy
         ]
     }
 }
@@ -254,21 +216,20 @@ extension CrystalModel {
 // MARK: - Usage Examples
 
 struct GemBridgeExamples {
-    
-    /// Simple list using bridge helpers
+
+    /// Simple list using bridge factory helpers.
     struct SimpleListExample: View {
         let crystals: [CrystalModel] = CrystalModel.previewCollection
-        
+
         var body: some View {
             List(crystals, id: \.seed) { crystal in
                 HStack {
                     FavorGemView.listItem(model: crystal)
-                    
+
                     VStack(alignment: .leading) {
-                        Text(crystal.assetGemShape.displayName)
+                        Text("\(crystal.assetGemFamily.displayName) gem")
                             .font(.headline)
-                        
-                        Text("\(crystal.transferCount) transfers")
+                        Text("\(crystal.transferCount) transfers · \(crystal.assetTier.displayName)")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -276,11 +237,11 @@ struct GemBridgeExamples {
             }
         }
     }
-    
-    /// Grid using adaptive rendering
+
+    /// Grid using adaptive rendering.
     struct AdaptiveGridExample: View {
         let crystals: [CrystalModel] = CrystalModel.previewCollection
-        
+
         var body: some View {
             ScrollView {
                 LazyVGrid(columns: [
@@ -289,12 +250,7 @@ struct GemBridgeExamples {
                 ], spacing: 20) {
                     ForEach(crystals, id: \.seed) { crystal in
                         VStack {
-                            AdaptiveGemView(
-                                model: crystal,
-                                size: 120,
-                                mode: .auto  // Automatically chooses best rendering
-                            )
-                            
+                            AdaptiveGemView(model: crystal, size: 120, mode: .auto)
                             Text(crystal.phase.whisper)
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
@@ -307,30 +263,27 @@ struct GemBridgeExamples {
             }
         }
     }
-    
-    /// Grouped display by tier
+
+    /// Grouped display by tier.
     struct GroupedByTierExample: View {
         let crystals: [CrystalModel] = CrystalModel.previewCollection
-        
+
         var body: some View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    let grouped = crystals.groupedByFrameTier()
-                    
-                    ForEach(FrameTier.allCases) { tier in
+                    let grouped = crystals.groupedByTier()
+
+                    ForEach(Tier.allCases) { tier in
                         if let models = grouped[tier] {
                             VStack(alignment: .leading, spacing: 12) {
                                 Text(tier.displayName + " Tier")
                                     .font(.title2.bold())
                                     .foregroundColor(tier.defaultColor)
-                                
+
                                 ScrollView(.horizontal, showsIndicators: false) {
                                     HStack(spacing: 16) {
                                         ForEach(models, id: \.seed) { model in
-                                            FavorGemView(
-                                                model: model,
-                                                size: 120
-                                            )
+                                            FavorGemView(model: model, size: 120)
                                         }
                                     }
                                 }
@@ -344,35 +297,32 @@ struct GemBridgeExamples {
             .foregroundColor(.white)
         }
     }
-    
-    /// Detail view with smart frame color
+
+    /// Detail view with material-based smart frame color.
     struct SmartDetailExample: View {
         let model: CrystalModel
-        
+
         var body: some View {
             VStack(spacing: 30) {
-                // Hero gem with material-based frame color
                 AnimatedFavorGemView(
-                    shape: model.assetGemShape,
-                    gemColor: model.primarySwiftUIColor,
-                    frameTier: model.assetFrameTier,
-                    frameColor: model.suggestedFrameColor,  // Smart color
-                    size: 300
+                    model: model,
+                    size: 300,
+                    customFrameColor: model.suggestedFrameColor
                 )
                 .shadow(color: model.primarySwiftUIColor.opacity(0.5), radius: 30)
-                
+
                 VStack(spacing: 12) {
-                    Text(model.assetGemShape.displayName)
+                    Text(model.assetGemFamily.displayName)
                         .font(.largeTitle.bold())
-                    
+
                     HStack(spacing: 20) {
                         Label("\(model.transferCount)", systemImage: "arrow.triangle.swap")
-                        Label(model.assetFrameTier.displayName, systemImage: "crown")
+                        Label(model.assetTier.displayName, systemImage: "crown")
                         Label(model.materialFamily.rawValue, systemImage: "sparkles")
                     }
                     .font(.subheadline)
                     .foregroundColor(.secondary)
-                    
+
                     Text(model.phase.whisper)
                         .font(.body)
                         .foregroundColor(.secondary)
@@ -402,54 +352,7 @@ struct GemBridgeExamples {
 }
 
 #Preview("Smart Detail") {
-    let model = CrystalModel.preview(shape: .heart, hue: 330, transferCount: 50)
+    let model = CrystalModel.preview(hue: 330, transferCount: 50)
     return GemBridgeExamples.SmartDetailExample(model: model)
 }
 
-#Preview("Adaptive Comparison") {
-    ZStack {
-        Color.black.ignoresSafeArea()
-        
-        VStack(spacing: 30) {
-            Text("Adaptive Rendering")
-                .font(.title.bold())
-                .foregroundColor(.white)
-            
-            // Small size - uses asset
-            VStack {
-                AdaptiveGemView(
-                    model: CrystalModel.preview(shape: .star, hue: 60, transferCount: 10),
-                    size: 80,
-                    mode: .auto
-                )
-                Text("Small (80pt) → Asset")
-                    .font(.caption)
-                    .foregroundColor(.white.opacity(0.7))
-            }
-            
-            // Medium size - uses asset
-            VStack {
-                AdaptiveGemView(
-                    model: CrystalModel.preview(shape: .star, hue: 60, transferCount: 10),
-                    size: 160,
-                    mode: .auto
-                )
-                Text("Medium (160pt) → Asset")
-                    .font(.caption)
-                    .foregroundColor(.white.opacity(0.7))
-            }
-            
-            // Large size - uses procedural
-            VStack {
-                AdaptiveGemView(
-                    model: CrystalModel.preview(shape: .star, hue: 60, transferCount: 10),
-                    size: 280,
-                    mode: .auto
-                )
-                Text("Large (280pt) → Procedural")
-                    .font(.caption)
-                    .foregroundColor(.white.opacity(0.7))
-            }
-        }
-    }
-}

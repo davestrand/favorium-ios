@@ -287,7 +287,9 @@ struct FavorCoinPreview: View {
                 materialFamily: "coloredGemstone",
                 baseForm: "diamond",
                 colorRelationship: "complementary",
-                secondaryInfluence: 0.6
+                secondaryInfluence: 0.6,
+                gemFamily: nil,
+                frameFamily: nil
             ),
             personality: CrystalPersonality(
                 complexityBias: 0.5,

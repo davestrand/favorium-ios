@@ -2296,7 +2296,9 @@ struct MagicalCrystalPlayground: View {
                 materialFamily: ["spectral", "coloredGemstone", "opalescent"].randomElement()!,
                 baseForm: shapes.randomElement()!,
                 colorRelationship: relationship,
-                secondaryInfluence: Double.random(in: 0.3...0.8)
+                secondaryInfluence: Double.random(in: 0.3...0.8),
+                gemFamily: GemFamily.allCases.randomElement()?.rawValue,
+                frameFamily: FrameFamily.allCases.randomElement()?.rawValue
             ),
             personality: CrystalPersonality(
                 complexityBias: Double.random(in: 0.5...1.0),

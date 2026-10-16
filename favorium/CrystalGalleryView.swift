@@ -19,7 +19,9 @@ struct CrystalGalleryView: View {
                 materialFamily: "coloredGemstone",
                 baseForm: "diamond",
                 colorRelationship: "complementary",
-                secondaryInfluence: 0.6
+                secondaryInfluence: 0.6,
+                gemFamily: nil,
+                frameFamily: nil
             ),
             personality: CrystalPersonality(
                 complexityBias: 0.5,
@@ -37,7 +39,9 @@ struct CrystalGalleryView: View {
                 materialFamily: "spectral",
                 baseForm: "diamond",
                 colorRelationship: "refracted",
-                secondaryInfluence: 0.7
+                secondaryInfluence: 0.7,
+                gemFamily: nil,
+                frameFamily: nil
             ),
             personality: CrystalPersonality(
                 complexityBias: 0.9,
@@ -55,7 +59,9 @@ struct CrystalGalleryView: View {
                 materialFamily: "opal",
                 baseForm: "diamond",
                 colorRelationship: "analogous",
-                secondaryInfluence: 0.5
+                secondaryInfluence: 0.5,
+                gemFamily: nil,
+                frameFamily: nil
             ),
             personality: CrystalPersonality(
                 complexityBias: 0.3,
@@ -73,7 +79,9 @@ struct CrystalGalleryView: View {
                 materialFamily: "metallic",
                 baseForm: "diamond",
                 colorRelationship: "gradient",
-                secondaryInfluence: 0.8
+                secondaryInfluence: 0.8,
+                gemFamily: nil,
+                frameFamily: nil
             ),
             personality: CrystalPersonality(
                 complexityBias: 0.7,

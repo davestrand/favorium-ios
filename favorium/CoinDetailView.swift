@@ -253,7 +253,9 @@ struct CoinHeaderSection: View {
             materialFamily: materialFamily,
             baseForm: baseForm,
             colorRelationship: colorRelationship,
-            secondaryInfluence: secondaryInfluence
+            secondaryInfluence: secondaryInfluence,
+            gemFamily: identityObj["gem_family"]?.stringValue,
+            frameFamily: identityObj["frame_family"]?.stringValue
         )
         
         let personality = CrystalPersonality(
@@ -282,7 +284,9 @@ struct CoinHeaderSection: View {
                 materialFamily: "coloredGemstone",
                 baseForm: "diamond",
                 colorRelationship: "complementary",
-                secondaryInfluence: 0.6
+                secondaryInfluence: 0.6,
+                gemFamily: nil,
+                frameFamily: nil
             ),
             personality: CrystalPersonality(
                 complexityBias: 0.5,

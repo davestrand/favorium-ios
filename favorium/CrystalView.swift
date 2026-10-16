@@ -2100,7 +2100,9 @@ struct OrbitalView: View {
             materialFamily: "coloredGemstone",
             baseForm: "diamond",
             colorRelationship: "complementary",
-            secondaryInfluence: 0.5
+            secondaryInfluence: 0.5,
+            gemFamily: nil,
+            frameFamily: nil
         ),
         personality: CrystalPersonality(
             complexityBias: 0.6,
@@ -2127,7 +2129,9 @@ struct OrbitalView: View {
             materialFamily: "spectral",
             baseForm: "diamond",
             colorRelationship: "refracted",
-            secondaryInfluence: 0.7
+            secondaryInfluence: 0.7,
+            gemFamily: nil,
+            frameFamily: nil
         ),
         personality: CrystalPersonality(
             complexityBias: 0.9,
@@ -2161,7 +2165,9 @@ struct OrbitalView: View {
                             materialFamily: "coloredGemstone",
                             baseForm: cut,
                             colorRelationship: "complementary",
-                            secondaryInfluence: 0.6
+                            secondaryInfluence: 0.6,
+                            gemFamily: nil,
+                            frameFamily: nil
                         ),
                         personality: CrystalPersonality(
                             complexityBias: 0.6,
@@ -2216,16 +2222,18 @@ struct CrystalTuningView: View {
         CrystalDNA(
             identity: CrystalIdentity(
                 primaryHue: primaryHue,
-                secondaryHue: primaryHue + 60,  // Complementary
-                saturation: colorSaturation,  // Use tunable saturation
+                secondaryHue: primaryHue + 60,
+                saturation: colorSaturation,
                 materialFamily: "coloredGemstone",
-                baseForm: "brilliant",  // High-facet brilliant cut
+                baseForm: "brilliant",
                 colorRelationship: "complementary",
-                secondaryInfluence: 0.3
+                secondaryInfluence: 0.3,
+                gemFamily: nil,
+                frameFamily: nil
             ),
             personality: CrystalPersonality(
                 complexityBias: 0.6,
-                orbitalAffinity: 0.0, // No orbitals for testing
+                orbitalAffinity: 0.0,
                 refraction: 0.8
             ),
             seed: "tuning-test"
@@ -2792,7 +2800,9 @@ struct AnyShape: Shape {
             materialFamily: "coloredGemstone",
             baseForm: "diamond",
             colorRelationship: "complementary",
-            secondaryInfluence: 0.5
+            secondaryInfluence: 0.5,
+            gemFamily: nil,
+            frameFamily: nil
         ),
         personality: CrystalPersonality(
             complexityBias: 0.6,
@@ -2819,7 +2829,9 @@ struct AnyShape: Shape {
             materialFamily: "spectral",
             baseForm: "diamond",
             colorRelationship: "refracted",
-            secondaryInfluence: 0.7
+            secondaryInfluence: 0.7,
+            gemFamily: nil,
+            frameFamily: nil
         ),
         personality: CrystalPersonality(
             complexityBias: 0.9,
@@ -2852,7 +2864,9 @@ struct AnyShape: Shape {
                             materialFamily: "coloredGemstone",
                             baseForm: cut,
                             colorRelationship: "complementary",
-                            secondaryInfluence: 0.6
+                            secondaryInfluence: 0.6,
+                            gemFamily: nil,
+                            frameFamily: nil
                         ),
                         personality: CrystalPersonality(
                             complexityBias: 0.6,

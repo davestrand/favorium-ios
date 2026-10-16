@@ -10,140 +10,145 @@ import SwiftUI
 
 // MARK: - Enums
 
-/// Nine gemstone shapes matching the asset files
-/// 
-/// Asset System:
-/// - **Lightning**: Uses tier-specific gems (gem_seed_lightning, gem_bloom_lightning, etc.)
-/// - **Other shapes**: Use single gem asset per shape (gem_heart, gem_brilliant, etc.)
-enum GemShape: String, CaseIterable, Identifiable {
-    case brilliant
-    case heart
-    case star
-    case hexagon
-    case octagon
-    case pear
-    case marquise
-    case cushion
-    case lightning  // New progressive gem shape with tier-specific assets
-    
+/// The four universal progression tiers shared by all gem and frame families.
+///
+/// Tier is determined by how many times a Favor has been transferred:
+/// - **Seed**:     0–4 transfers
+/// - **Bloom**:    5–14 transfers
+/// - **Legacy**:   15–29 transfers
+/// - **Radiance**: 30+ transfers
+enum Tier: String, CaseIterable, Identifiable {
+    case seed
+    case bloom
+    case legacy
+    case radiance
+
     var id: String { rawValue }
-    
-    var displayName: String {
-        rawValue.capitalized
+
+    var displayName: String { rawValue.capitalized }
+
+    /// Derive tier from a Favor's transfer count.
+    static func from(transferCount: Int) -> Tier {
+        switch transferCount {
+        case 0..<5:   return .seed
+        case 5..<15:  return .bloom
+        case 15..<30: return .legacy
+        default:      return .radiance
+        }
     }
-    
-    /// Map from CrystalModel baseForm to GemShape
-    static func from(baseForm: String) -> GemShape {
-        let normalized = baseForm.lowercased().trimmingCharacters(in: .whitespaces)
-        switch normalized {
-        case "brilliant", "diamond", "circle", "round":
-            return .brilliant
-        case "heart":
-            return .heart
-        case "star":
-            return .star
-        case "hexagon", "hex":
-            return .hexagon
-        case "octagon", "oct":
-            return .octagon
-        case "pear", "teardrop":
-            return .pear
-        case "marquise":
-            return .marquise
-        case "cushion":
-            return .cushion
-        case "lightning", "bolt":
-            return .lightning
-        default:
-            return .brilliant // fallback
+
+    /// Suggested tint color that reflects each tier's visual theme.
+    var defaultColor: Color {
+        switch self {
+        case .seed:
+            return Color(hue: 0.28, saturation: 0.5, brightness: 0.6)   // earthy green
+        case .bloom:
+            return Color(hue: 0.55, saturation: 0.7, brightness: 0.85)  // vibrant blue
+        case .legacy:
+            return Color(hue: 0.12, saturation: 0.8, brightness: 0.9)   // warm gold
+        case .radiance:
+            return Color(hue: 0.15, saturation: 0.15, brightness: 1.0)  // near-white platinum
         }
     }
 }
 
-/// Frame tiers matching asset complexity levels
-enum FrameTier: String, CaseIterable, Identifiable {
-    case seed       // Starting tier (0-4 transfers)
-    case bloom      // Growing tier (5-14 transfers)
-    case legacy     // Established tier (15-29 transfers)
-    case radiance   // Maximum tier (30+ transfers)
-    
+/// A family of gem art assets — each family has one image per `Tier`.
+///
+/// Asset naming convention: `gem_{family}_{tier}.png`
+/// e.g. `gem_lightning_seed.png`, `gem_lightning_radiance.png`
+///
+/// Add a new case here when a new gem family's art is ready.
+enum GemFamily: String, CaseIterable, Identifiable {
+    case lightning
+
     var id: String { rawValue }
-    
-    var displayName: String {
-        rawValue.capitalized
+
+    var displayName: String { rawValue.capitalized }
+
+    /// The asset name for this family at a given tier.
+    func assetName(tier: Tier) -> String {
+        "gem_\(rawValue)_\(tier.rawValue)"
     }
-    
-    /// Map from transfer count to frame tier
-    static func from(transferCount: Int) -> FrameTier {
-        switch transferCount {
-        case 0..<5:
-            return .seed
-        case 5..<15:
-            return .bloom
-        case 15..<30:
-            return .legacy
-        default:
-            return .radiance
-        }
+
+    /// Map from a `CrystalDNA` gemFamily string to a `GemFamily`.
+    /// Falls back to `.lightning` until additional families are added.
+    static func from(_ string: String?) -> GemFamily {
+        guard let string else { return .lightning }
+        return GemFamily(rawValue: string.lowercased()) ?? .lightning
     }
-    
-    /// Suggested frame color based on tier theme
-    var defaultColor: Color {
-        switch self {
-        case .seed:
-            // Fresh green/brown earth tones
-            return Color(hue: 0.28, saturation: 0.5, brightness: 0.6)
-        case .bloom:
-            // Vibrant flowering colors
-            return Color(hue: 0.55, saturation: 0.7, brightness: 0.85)
-        case .legacy:
-            // Rich gold/amber tones
-            return Color(hue: 0.12, saturation: 0.8, brightness: 0.9)
-        case .radiance:
-            // Brilliant white/platinum
-            return Color(hue: 0.15, saturation: 0.15, brightness: 1.0)
-        }
+}
+
+/// A family of frame art assets — each family has one image per `Tier`.
+///
+/// Asset naming convention: `frame_{family}_{tier}.png`
+/// e.g. `frame_lightning_seed.png`, `frame_gothic_radiance.png`
+///
+/// A frame family is independent of the gem family — any combination is valid.
+/// Add a new case here when a new frame family's art is ready.
+enum FrameFamily: String, CaseIterable, Identifiable {
+    case lightning
+
+    var id: String { rawValue }
+
+    var displayName: String { rawValue.capitalized }
+
+    /// The asset name for this family at a given tier.
+    func assetName(tier: Tier) -> String {
+        "frame_\(rawValue)_\(tier.rawValue)"
     }
-    
-    /// Asset name mapping
-    var assetName: String {
-        // All tiers now use their proper names
-        return rawValue
+
+    /// Map from a `CrystalDNA` frameFamily string to a `FrameFamily`.
+    /// Falls back to `.lightning` until additional families are added.
+    static func from(_ string: String?) -> FrameFamily {
+        guard let string else { return .lightning }
+        return FrameFamily(rawValue: string.lowercased()) ?? .lightning
     }
 }
 
 // MARK: - FavorGemView
 
-/// Reusable asset-based gemstone view with decorative frame
+/// Reusable asset-based gemstone view with decorative frame.
+///
+/// Renders a `GemFamily` gem inside a `FrameFamily` frame, both at the same `Tier`.
+/// Any gem family can be paired with any frame family — they are fully independent.
+///
+/// Asset names are constructed as:
+/// - Gem:   `gem_{gemFamily}_{tier}`   e.g. `gem_lightning_bloom`
+/// - Frame: `frame_{frameFamily}_{tier}` e.g. `frame_gothic_bloom`
 struct FavorGemView: View {
-    let shape: GemShape
+    let gemFamily: GemFamily
+    let frameFamily: FrameFamily
+    let tier: Tier
     let gemColor: Color
-    let frameTier: FrameTier
     let frameColor: Color?
     let size: CGFloat
     let showGlow: Bool
     let showShimmer: Bool
-    
-    /// Primary initializer with all options
+
+    /// Primary initializer — explicitly specify both families and tier.
     init(
-        shape: GemShape,
+        gemFamily: GemFamily,
+        frameFamily: FrameFamily,
+        tier: Tier,
         gemColor: Color,
-        frameTier: FrameTier,
         frameColor: Color? = nil,
         size: CGFloat = 200,
         showGlow: Bool = false,
         showShimmer: Bool = false
     ) {
-        self.shape = shape
-        self.gemColor = gemColor
-        self.frameTier = frameTier
-        self.frameColor = frameColor
-        self.size = size
-        self.showGlow = showGlow
+        self.gemFamily   = gemFamily
+        self.frameFamily = frameFamily
+        self.tier        = tier
+        self.gemColor    = gemColor
+        self.frameColor  = frameColor
+        self.size        = size
+        self.showGlow    = showGlow
         self.showShimmer = showShimmer
     }
-    
-    /// Convenience initializer from CrystalModel
+
+    /// Convenience initializer from a `CrystalModel`.
+    /// Reads `gemFamily` and `frameFamily` from the model's DNA when available,
+    /// falling back to `.lightning` for both until additional families are in production.
     init(
         model: CrystalModel,
         size: CGFloat = 200,
@@ -151,16 +156,17 @@ struct FavorGemView: View {
         showGlow: Bool = false,
         showShimmer: Bool = false
     ) {
-        self.shape = GemShape.from(baseForm: model.baseForm)
-        self.gemColor = Color(
+        self.gemFamily   = GemFamily.from(model.gemFamily)
+        self.frameFamily = FrameFamily.from(model.frameFamily)
+        self.tier        = Tier.from(transferCount: model.transferCount)
+        self.gemColor    = Color(
             hue: model.primaryHue / 360.0,
             saturation: model.saturation,
             brightness: 0.9
         )
-        self.frameTier = FrameTier.from(transferCount: model.transferCount)
-        self.frameColor = customFrameColor
-        self.size = size
-        self.showGlow = showGlow
+        self.frameColor  = customFrameColor
+        self.size        = size
+        self.showGlow    = showGlow
         self.showShimmer = showShimmer
     }
     
@@ -448,22 +454,19 @@ struct FavorGemView: View {
     }
     
     // MARK: - Asset Name Helpers
-    
+
+    /// e.g. `gem_lightning_bloom`
     private var gemAssetName: String {
-        // Lightning uses tier-specific gems (new system)
-        if shape == .lightning {
-            return "gem_\(frameTier.rawValue)_lightning"
-        }
-        // Other shapes use single gem asset (legacy system)
-        return "gem_\(shape.rawValue)"
+        gemFamily.assetName(tier: tier)
     }
-    
+
+    /// e.g. `frame_lightning_bloom`
     private var frameAssetName: String {
-        "frame_\(frameTier.assetName)_\(shape.rawValue)"
+        frameFamily.assetName(tier: tier)
     }
-    
+
     private var resolvedFrameColor: Color {
-        frameColor ?? frameTier.defaultColor
+        frameColor ?? tier.defaultColor
     }
 }
 
@@ -471,42 +474,45 @@ struct FavorGemView: View {
 
 /// Enhanced gem view with pulse and rotation animations
 struct AnimatedFavorGemView: View {
-    let shape: GemShape
+    let gemFamily: GemFamily
+    let frameFamily: FrameFamily
+    let tier: Tier
     let gemColor: Color
-    let frameTier: FrameTier
     let frameColor: Color?
     let size: CGFloat
-    
+
     @State private var pulse: Double = 1.0
     @State private var rotation: Double = 0
     @State private var shimmerPhase: Double = 0
-    
+
     init(
-        shape: GemShape,
+        gemFamily: GemFamily,
+        frameFamily: FrameFamily,
+        tier: Tier,
         gemColor: Color,
-        frameTier: FrameTier,
         frameColor: Color? = nil,
         size: CGFloat = 200
     ) {
-        self.shape = shape
-        self.gemColor = gemColor
-        self.frameTier = frameTier
-        self.frameColor = frameColor
-        self.size = size
+        self.gemFamily   = gemFamily
+        self.frameFamily = frameFamily
+        self.tier        = tier
+        self.gemColor    = gemColor
+        self.frameColor  = frameColor
+        self.size        = size
     }
-    
+
     init(model: CrystalModel, size: CGFloat = 200, customFrameColor: Color? = nil) {
-        self.shape = GemShape.from(baseForm: model.baseForm)
-        self.gemColor = Color(
+        self.gemFamily   = GemFamily.from(model.gemFamily)
+        self.frameFamily = FrameFamily.from(model.frameFamily)
+        self.tier        = Tier.from(transferCount: model.transferCount)
+        self.gemColor    = Color(
             hue: model.primaryHue / 360.0,
             saturation: model.saturation,
             brightness: 0.9
         )
-        self.frameTier = FrameTier.from(transferCount: model.transferCount)
-        self.frameColor = customFrameColor
-        self.size = size
+        self.frameColor  = customFrameColor
+        self.size        = size
     }
-    
     var body: some View {
         ZStack {
             // Pulsing glow
@@ -525,12 +531,13 @@ struct AnimatedFavorGemView: View {
                 )
                 .frame(width: size * pulse, height: size * pulse)
                 .blur(radius: size * 0.15)
-            
+
             // Gem and frame
             FavorGemView(
-                shape: shape,
+                gemFamily: gemFamily,
+                frameFamily: frameFamily,
+                tier: tier,
                 gemColor: gemColor,
-                frameTier: frameTier,
                 frameColor: frameColor,
                 size: size,
                 showGlow: false,
@@ -544,7 +551,6 @@ struct AnimatedFavorGemView: View {
             withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)) {
                 pulse = 1.1
             }
-            
             // Very slow rotation
             withAnimation(.linear(duration: 60).repeatForever(autoreverses: false)) {
                 rotation = 360
@@ -555,90 +561,104 @@ struct AnimatedFavorGemView: View {
 
 // MARK: - Gallery View for Testing
 
-/// Preview gallery showing all gem shapes and frame tiers
+/// Preview gallery showing all gem/frame family combinations across tiers
 struct FavorGemGallery: View {
-    @State private var selectedShape: GemShape = .brilliant
-    @State private var selectedTier: FrameTier = .legacy
+    @State private var selectedGemFamily: GemFamily = .lightning
+    @State private var selectedFrameFamily: FrameFamily = .lightning
+    @State private var selectedTier: Tier = .legacy
     @State private var primaryHue: Double = 200
     @State private var saturation: Double = 0.8
     @State private var frameHue: Double = 50
     @State private var useCustomFrameColor: Bool = false
-    
+
     var gemColor: Color {
         Color(hue: primaryHue / 360.0, saturation: saturation, brightness: 0.9)
     }
-    
+
     var frameColor: Color {
         Color(hue: frameHue / 360.0, saturation: 0.8, brightness: 0.85)
     }
-    
+
     var body: some View {
         ZStack {
-            // Dark background
             Color.black.ignoresSafeArea()
-            
+
             ScrollView {
                 VStack(spacing: 30) {
-                    // Title
                     Text("Favor Gem Gallery")
                         .font(.system(size: 32, weight: .bold, design: .rounded))
                         .foregroundColor(.white)
                         .padding(.top, 40)
-                    
+
                     // Featured gem (large, animated)
                     VStack(spacing: 16) {
                         AnimatedFavorGemView(
-                            shape: selectedShape,
+                            gemFamily: selectedGemFamily,
+                            frameFamily: selectedFrameFamily,
+                            tier: selectedTier,
                             gemColor: gemColor,
-                            frameTier: selectedTier,
                             frameColor: useCustomFrameColor ? frameColor : nil,
                             size: 280
                         )
-                        
+
                         VStack(spacing: 8) {
-                            Text(selectedShape.displayName)
+                            Text("\(selectedGemFamily.displayName) gem")
                                 .font(.title2.bold())
                                 .foregroundColor(.white)
-                            
-                            Text("\(selectedTier.displayName) Frame")
+
+                            Text("\(selectedFrameFamily.displayName) frame · \(selectedTier.displayName)")
                                 .font(.subheadline)
                                 .foregroundColor(.white.opacity(0.7))
                         }
                     }
                     .padding(.vertical, 20)
-                    
+
                     // Controls
                     VStack(spacing: 24) {
-                        // Shape selector
+                        // Gem family selector
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Gemstone Shape")
+                            Text("Gem Family")
                                 .font(.headline)
                                 .foregroundColor(.white)
-                            
-                            LazyVGrid(columns: [
-                                GridItem(.flexible()),
-                                GridItem(.flexible()),
-                                GridItem(.flexible()),
-                                GridItem(.flexible())
-                            ], spacing: 12) {
-                                ForEach(GemShape.allCases) { shape in
-                                    ShapeButton(
-                                        shape: shape,
-                                        isSelected: selectedShape == shape,
-                                        action: { selectedShape = shape }
+
+                            HStack(spacing: 12) {
+                                ForEach(GemFamily.allCases) { family in
+                                    FamilyButton(
+                                        title: family.displayName,
+                                        isSelected: selectedGemFamily == family,
+                                        color: .cyan,
+                                        action: { selectedGemFamily = family }
                                     )
                                 }
                             }
                         }
-                        
-                        // Frame tier selector
+
+                        // Frame family selector
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Frame Tier")
+                            Text("Frame Family")
                                 .font(.headline)
                                 .foregroundColor(.white)
-                            
+
                             HStack(spacing: 12) {
-                                ForEach(FrameTier.allCases) { tier in
+                                ForEach(FrameFamily.allCases) { family in
+                                    FamilyButton(
+                                        title: family.displayName,
+                                        isSelected: selectedFrameFamily == family,
+                                        color: .orange,
+                                        action: { selectedFrameFamily = family }
+                                    )
+                                }
+                            }
+                        }
+
+                        // Tier selector
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Tier")
+                                .font(.headline)
+                                .foregroundColor(.white)
+
+                            HStack(spacing: 12) {
+                                ForEach(Tier.allCases) { tier in
                                     TierButton(
                                         tier: tier,
                                         isSelected: selectedTier == tier,
@@ -647,13 +667,13 @@ struct FavorGemGallery: View {
                                 }
                             }
                         }
-                        
+
                         // Color controls
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Gem Color")
                                 .font(.headline)
                                 .foregroundColor(.white)
-                            
+
                             VStack(spacing: 8) {
                                 HStack {
                                     Text("Hue")
@@ -664,7 +684,7 @@ struct FavorGemGallery: View {
                                 }
                                 Slider(value: $primaryHue, in: 0...360, step: 1)
                                     .tint(gemColor)
-                                
+
                                 HStack {
                                     Text("Saturation")
                                         .foregroundColor(.white.opacity(0.7))
@@ -676,7 +696,7 @@ struct FavorGemGallery: View {
                                     .tint(.cyan)
                             }
                         }
-                        
+
                         // Custom frame color
                         VStack(alignment: .leading, spacing: 12) {
                             Toggle(isOn: $useCustomFrameColor) {
@@ -685,7 +705,7 @@ struct FavorGemGallery: View {
                                     .foregroundColor(.white)
                             }
                             .tint(.cyan)
-                            
+
                             if useCustomFrameColor {
                                 VStack(spacing: 8) {
                                     HStack {
@@ -702,49 +722,39 @@ struct FavorGemGallery: View {
                         }
                     }
                     .padding(.horizontal, 24)
-                    
-                    // Complete matrix view
+
+                    // Tier progression for the current gem/frame pairing
                     VStack(alignment: .leading, spacing: 16) {
-                        Text("Complete Collection")
+                        Text("Tier Progression")
                             .font(.title2.bold())
                             .foregroundColor(.white)
                             .padding(.horizontal, 24)
-                        
-                        ForEach(FrameTier.allCases) { tier in
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("\(tier.displayName) Tier")
-                                    .font(.headline)
-                                    .foregroundColor(tier.defaultColor)
-                                    .padding(.horizontal, 24)
-                                
-                                ScrollView(.horizontal, showsIndicators: false) {
-                                    HStack(spacing: 16) {
-                                        ForEach(GemShape.allCases) { shape in
-                                            VStack(spacing: 8) {
-                                                FavorGemView(
-                                                    shape: shape,
-                                                    gemColor: gemColor,
-                                                    frameTier: tier,
-                                                    frameColor: useCustomFrameColor ? frameColor : nil,
-                                                    size: 100,
-                                                    showGlow: true,
-                                                    showShimmer: false
-                                                )
-                                                
-                                                Text(shape.displayName)
-                                                    .font(.caption2)
-                                                    .foregroundColor(.white.opacity(0.6))
-                                            }
-                                        }
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 20) {
+                                ForEach(Tier.allCases) { tier in
+                                    VStack(spacing: 8) {
+                                        FavorGemView(
+                                            gemFamily: selectedGemFamily,
+                                            frameFamily: selectedFrameFamily,
+                                            tier: tier,
+                                            gemColor: gemColor,
+                                            frameColor: useCustomFrameColor ? frameColor : nil,
+                                            size: 120,
+                                            showGlow: true
+                                        )
+
+                                        Text(tier.displayName)
+                                            .font(.caption)
+                                            .foregroundColor(tier.defaultColor)
                                     }
-                                    .padding(.horizontal, 24)
                                 }
                             }
+                            .padding(.horizontal, 24)
                         }
                     }
                     .padding(.top, 20)
-                    
-                    // Bottom spacing
+
                     Color.clear.frame(height: 40)
                 }
             }
@@ -754,42 +764,36 @@ struct FavorGemGallery: View {
 
 // MARK: - Supporting Views
 
-struct ShapeButton: View {
-    let shape: GemShape
+struct FamilyButton: View {
+    let title: String
     let isSelected: Bool
+    let color: Color
     let action: () -> Void
-    
+
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 6) {
-                Image("gem_\(shape.rawValue)")
-                    .resizable()
-                    .renderingMode(.template)
-                    .foregroundColor(isSelected ? .cyan : .white.opacity(0.5))
-                    .frame(width: 50, height: 50)
-                
-                Text(shape.displayName)
-                    .font(.caption2)
-                    .foregroundColor(isSelected ? .cyan : .white.opacity(0.5))
-            }
-            .padding(8)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(isSelected ? Color.cyan.opacity(0.2) : Color.white.opacity(0.05))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(isSelected ? Color.cyan : Color.clear, lineWidth: 2)
-            )
+            Text(title)
+                .font(.subheadline.bold())
+                .foregroundColor(isSelected ? .black : .white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(isSelected ? color : Color.white.opacity(0.1))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(color, lineWidth: isSelected ? 0 : 1.5)
+                )
         }
     }
 }
 
 struct TierButton: View {
-    let tier: FrameTier
+    let tier: Tier
     let isSelected: Bool
     let action: () -> Void
-    
+
     var body: some View {
         Button(action: action) {
             Text(tier.displayName)
@@ -823,18 +827,20 @@ extension MagicalCrystalView {
 extension View {
     /// Wrap any view with a gem badge overlay
     func gemBadge(
-        shape: GemShape,
+        gemFamily: GemFamily = .lightning,
+        frameFamily: FrameFamily = .lightning,
+        tier: Tier,
         color: Color,
-        tier: FrameTier,
         size: CGFloat = 40,
         alignment: Alignment = .topTrailing,
         offset: CGSize = .zero
     ) -> some View {
         self.overlay(alignment: alignment) {
             FavorGemView(
-                shape: shape,
+                gemFamily: gemFamily,
+                frameFamily: frameFamily,
+                tier: tier,
                 gemColor: color,
-                frameTier: tier,
                 size: size,
                 showGlow: false,
                 showShimmer: false
@@ -849,11 +855,9 @@ extension View {
 extension Color {
     /// Approximate hue value from color (simplified)
     var hueValue: Double {
-        // This is a simplified extraction - for the dispersion effect
-        // In production, you might want a more accurate UIColor/NSColor conversion
-        return 0.5 // Fallback for now, but will work with the truncatingRemainder
+        return 0.5
     }
-    
+
     /// RGB components for color blending
     var components: (red: Double, green: Double, blue: Double) {
         #if canImport(UIKit)
@@ -867,143 +871,76 @@ extension Color {
         #elseif canImport(AppKit)
         let nsColor = NSColor(self)
         guard let rgbColor = nsColor.usingColorSpace(.deviceRGB) else {
-            return (0.5, 0.5, 0.5) // Fallback
+            return (0.5, 0.5, 0.5)
         }
         return (Double(rgbColor.redComponent), Double(rgbColor.greenComponent), Double(rgbColor.blueComponent))
         #else
-        return (0.5, 0.5, 0.5) // Fallback
+        return (0.5, 0.5, 0.5)
         #endif
-    }
-}
-
-// MARK: - Shape Path Helpers
-
-extension GemShape {
-    /// Get an approximate SwiftUI shape for hit testing or masking
-    /// Note: These are simplified versions, actual assets have more detail
-    @ViewBuilder
-    var approximateShape: some View {
-        switch self {
-        case .brilliant:
-            Circle()
-        case .heart:
-            HeartShape()
-        case .star:
-            StarShape()
-        case .hexagon:
-            HexagonShape()
-        case .octagon:
-            OctagonShape()
-        case .pear:
-            PearShape()
-        case .marquise:
-            MarquiseShape()
-        case .cushion:
-            CushionShape()
-        case .lightning:
-            LightningBoltShape()
-        }
-    }
-}
-
-// MARK: - Lightning Shape Definition
-// Note: Other shapes are defined in MagicalCrystalView.swift
-
-struct LightningBoltShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let w = rect.width
-        let h = rect.height
-        
-        // Lightning bolt zigzag pattern
-        path.move(to: CGPoint(x: w * 0.6, y: 0))
-        path.addLine(to: CGPoint(x: w * 0.35, y: h * 0.4))
-        path.addLine(to: CGPoint(x: w * 0.55, y: h * 0.4))
-        path.addLine(to: CGPoint(x: w * 0.25, y: h))
-        path.addLine(to: CGPoint(x: w * 0.5, y: h * 0.55))
-        path.addLine(to: CGPoint(x: w * 0.35, y: h * 0.55))
-        path.closeSubpath()
-        return path
     }
 }
 
 // MARK: - Asset Verification
 
-/// Quick check to see which frame and gem assets are loaded
+/// Visual check confirming that all expected gem and frame assets are present in the catalog.
 struct FrameAssetVerificationView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Frame Assets Verification")
+                Text("Asset Verification")
                     .font(.title.bold())
                     .padding()
-                
-                ForEach(FrameTier.allCases) { tier in
+
+                ForEach(Tier.allCases) { tier in
                     VStack(alignment: .leading, spacing: 8) {
                         Text("\(tier.displayName) Tier")
                             .font(.headline)
                             .foregroundColor(tier.defaultColor)
-                        
+
                         LazyVGrid(columns: [
                             GridItem(.flexible()),
                             GridItem(.flexible()),
                             GridItem(.flexible()),
                             GridItem(.flexible())
                         ], spacing: 12) {
-                            ForEach(GemShape.allCases) { shape in
-                                VStack(spacing: 4) {
-                                    // Lightning uses tier-specific gems
-                                    let gemAssetName = shape == .lightning 
-                                        ? "gem_\(tier.rawValue)_lightning"
-                                        : "gem_\(shape.rawValue)"
-                                    let frameAssetName = "frame_\(tier.rawValue)_\(shape.rawValue)"
-                                    
-                                    // Try to load the gem and frame
-                                    ZStack {
-                                        Image(gemAssetName)
-                                            .resizable()
-                                            .renderingMode(.template)
-                                            .foregroundColor(.cyan)
-                                            .frame(width: 50, height: 50)
-                                        
-                                        Image(frameAssetName)
-                                            .resizable()
-                                            .renderingMode(.template)
-                                            .foregroundColor(tier.defaultColor.opacity(0.7))
-                                            .frame(width: 60, height: 60)
-                                    }
-                                    .background(Color.gray.opacity(0.2))
-                                    .cornerRadius(8)
-                                    
-                                    Text(shape.rawValue)
-                                        .font(.caption2)
-                                    
-                                    // Check if both assets loaded
-                                    HStack(spacing: 4) {
-                                        if UIImage(named: gemAssetName) != nil {
-                                            Image(systemName: "checkmark.circle.fill")
-                                                .foregroundColor(.green)
+                            ForEach(GemFamily.allCases) { gemFamily in
+                                ForEach(FrameFamily.allCases) { frameFamily in
+                                    let gemAsset   = gemFamily.assetName(tier: tier)
+                                    let frameAsset = frameFamily.assetName(tier: tier)
+
+                                    VStack(spacing: 4) {
+                                        ZStack {
+                                            Image(gemAsset)
+                                                .resizable()
+                                                .renderingMode(.template)
+                                                .foregroundColor(.cyan)
+                                                .frame(width: 50, height: 50)
+
+                                            Image(frameAsset)
+                                                .resizable()
+                                                .renderingMode(.template)
+                                                .foregroundColor(tier.defaultColor.opacity(0.7))
+                                                .frame(width: 60, height: 60)
+                                        }
+                                        .background(Color.gray.opacity(0.2))
+                                        .cornerRadius(8)
+
+                                        Text("\(gemFamily.rawValue)/\(frameFamily.rawValue)")
+                                            .font(.caption2)
+
+                                        HStack(spacing: 4) {
+                                            Image(systemName: UIImage(named: gemAsset) != nil
+                                                  ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                                .foregroundColor(UIImage(named: gemAsset) != nil ? .green : .red)
                                                 .font(.caption2)
-                                        } else {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .foregroundColor(.red)
+
+                                            Image(systemName: UIImage(named: frameAsset) != nil
+                                                  ? "checkmark.square.fill" : "xmark.square.fill")
+                                                .foregroundColor(UIImage(named: frameAsset) != nil ? .green : .red)
                                                 .font(.caption2)
                                         }
-                                        
-                                        if UIImage(named: frameAssetName) != nil {
-                                            Image(systemName: "checkmark.square.fill")
-                                                .foregroundColor(.green)
-                                                .font(.caption2)
-                                        } else {
-                                            Image(systemName: "xmark.square.fill")
-                                                .foregroundColor(.red)
-                                                .font(.caption2)
-                                        }
-                                    }
-                                    
-                                    // Show asset names for Lightning (new system)
-                                    if shape == .lightning {
-                                        Text("G: \(gemAssetName)")
+
+                                        Text(gemAsset)
                                             .font(.system(size: 8))
                                             .foregroundColor(.cyan.opacity(0.7))
                                             .lineLimit(1)
@@ -1017,33 +954,21 @@ struct FrameAssetVerificationView: View {
                     .cornerRadius(12)
                 }
                 .padding(.horizontal)
-                
+
                 // Legend
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Legend")
                         .font(.headline)
                         .foregroundColor(.white)
-                    
+
                     HStack {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.green)
-                        Text("= Gem asset loaded")
-                            .font(.caption)
-                            .foregroundColor(.white.opacity(0.7))
+                        Image(systemName: "checkmark.circle.fill").foregroundColor(.green)
+                        Text("= Gem asset loaded").font(.caption).foregroundColor(.white.opacity(0.7))
                     }
-                    
                     HStack {
-                        Image(systemName: "checkmark.square.fill")
-                            .foregroundColor(.green)
-                        Text("= Frame asset loaded")
-                            .font(.caption)
-                            .foregroundColor(.white.opacity(0.7))
+                        Image(systemName: "checkmark.square.fill").foregroundColor(.green)
+                        Text("= Frame asset loaded").font(.caption).foregroundColor(.white.opacity(0.7))
                     }
-                    
-                    Text("Lightning uses tier-specific gems (new system)")
-                        .font(.caption)
-                        .foregroundColor(.cyan)
-                        .padding(.top, 4)
                 }
                 .padding()
                 .background(Color.white.opacity(0.05))
@@ -1065,11 +990,11 @@ struct FrameAssetVerificationView: View {
 #Preview("Single Gem") {
     ZStack {
         Color.black.ignoresSafeArea()
-        
         FavorGemView(
-            shape: .heart,
-            gemColor: .pink,
-            frameTier: .legacy,
+            gemFamily: .lightning,
+            frameFamily: .lightning,
+            tier: .legacy,
+            gemColor: .cyan,
             size: 280,
             showGlow: true,
             showShimmer: true
@@ -1080,11 +1005,11 @@ struct FrameAssetVerificationView: View {
 #Preview("Animated Gem") {
     ZStack {
         Color.black.ignoresSafeArea()
-        
         AnimatedFavorGemView(
-            shape: .star,
+            gemFamily: .lightning,
+            frameFamily: .lightning,
+            tier: .bloom,
             gemColor: .cyan,
-            frameTier: .bloom,
             size: 280
         )
     }
@@ -1093,70 +1018,54 @@ struct FrameAssetVerificationView: View {
 #Preview("Gallery") {
     FavorGemGallery()
 }
+
 #Preview("Lightning Progression") {
     ZStack {
         Color.black.ignoresSafeArea()
-        
+
         VStack(spacing: 30) {
-            Text("Lightning Evolution System")
+            Text("Lightning Evolution")
                 .font(.title.bold())
                 .foregroundColor(.white)
-            
-            Text("Each tier has its own unique Lightning gem")
+
+            Text("gem_lightning_{tier}  +  frame_lightning_{tier}")
                 .font(.subheadline)
                 .foregroundColor(.cyan)
-            
-            // Show all 4 tiers of Lightning
+
             HStack(spacing: 20) {
-                ForEach(FrameTier.allCases) { tier in
+                ForEach(Tier.allCases) { tier in
                     VStack(spacing: 12) {
                         FavorGemView(
-                            shape: .lightning,
+                            gemFamily: .lightning,
+                            frameFamily: .lightning,
+                            tier: tier,
                             gemColor: .cyan,
-                            frameTier: tier,
-                            size: 160,
-                            showGlow: true,
-                            showShimmer: false
+                            size: 140,
+                            showGlow: true
                         )
-                        
+
                         VStack(spacing: 4) {
                             Text(tier.displayName)
                                 .font(.headline)
                                 .foregroundColor(tier.defaultColor)
-                            
-                            Text("gem_\(tier.rawValue)_lightning")
-                                .font(.system(size: 10))
+
+                            Text(GemFamily.lightning.assetName(tier: tier))
+                                .font(.system(size: 9))
+                                .foregroundColor(.white.opacity(0.5))
+
+                            Text(FrameFamily.lightning.assetName(tier: tier))
+                                .font(.system(size: 9))
                                 .foregroundColor(.white.opacity(0.5))
                         }
                     }
                 }
             }
             .padding()
-            
-            Text("Assets Required:")
-                .font(.headline)
-                .foregroundColor(.white)
-                .padding(.top)
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Group {
-                    Text("• gem_seed_lightning.png")
-                    Text("• gem_bloom_lightning.png")
-                    Text("• gem_legacy_lightning.png")
-                    Text("• gem_radiance_lightning.png")
-                    Text("• frame_seed_lightning.png")
-                    Text("• frame_bloom_lightning.png")
-                    Text("• frame_legacy_lightning.png")
-                    Text("• frame_radiance_lightning.png")
-                }
-                .font(.caption)
-                .foregroundColor(.cyan.opacity(0.8))
-            }
-            .padding()
-            .background(Color.white.opacity(0.05))
-            .cornerRadius(12)
         }
         .padding()
     }
 }
+
+
+
 
