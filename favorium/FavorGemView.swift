@@ -60,6 +60,7 @@ enum Tier: String, CaseIterable, Identifiable {
 /// Add a new case here when a new gem family's art is ready.
 enum GemFamily: String, CaseIterable, Identifiable {
     case lightning
+    case celestial
 
     var id: String { rawValue }
 
@@ -87,6 +88,7 @@ enum GemFamily: String, CaseIterable, Identifiable {
 /// Add a new case here when a new frame family's art is ready.
 enum FrameFamily: String, CaseIterable, Identifiable {
     case lightning
+    case celestial
 
     var id: String { rawValue }
 
@@ -102,6 +104,13 @@ enum FrameFamily: String, CaseIterable, Identifiable {
     static func from(_ string: String?) -> FrameFamily {
         guard let string else { return .lightning }
         return FrameFamily(rawValue: string.lowercased()) ?? .lightning
+    }
+
+    /// Returns the frame family that matches a given gem family.
+    /// Frame and gem families must always be paired together — use this
+    /// whenever a frame family needs to be derived from a gem selection.
+    static func matching(_ gemFamily: GemFamily) -> FrameFamily {
+        FrameFamily(rawValue: gemFamily.rawValue) ?? .lightning
     }
 }
 
@@ -142,14 +151,15 @@ enum GemTrait: String, CaseIterable {
 
 /// Reusable asset-based gemstone view with decorative frame.
 ///
-/// Renders a `GemFamily` gem inside a `FrameFamily` frame, both at the same `Tier`.
-/// Any gem family can be paired with any frame family — they are fully independent.
+/// Renders a `GemFamily` gem inside its matching `FrameFamily` frame, both at the same `Tier`.
+/// The frame family is always derived from the gem family — they are never set independently.
 ///
 /// Asset names are constructed as:
 /// - Gem:   `gem_{gemFamily}_{tier}`   e.g. `gem_lightning_bloom`
-/// - Frame: `frame_{frameFamily}_{tier}` e.g. `frame_gothic_bloom`
+/// - Frame: `frame_{frameFamily}_{tier}` e.g. `frame_lightning_bloom`
 struct FavorGemView: View {
     let gemFamily: GemFamily
+    /// Always derived from `gemFamily` via `FrameFamily.matching(_:)` — never set independently.
     let frameFamily: FrameFamily
     let tier: Tier
     let gemColor: Color
@@ -160,10 +170,9 @@ struct FavorGemView: View {
     /// Optional persistent trait — assigned once at gem generation, nil for Seed.
     let trait: GemTrait?
 
-    /// Primary initializer — explicitly specify both families and tier.
+    /// Primary initializer. Frame family is always derived from gem family automatically.
     init(
         gemFamily: GemFamily,
-        frameFamily: FrameFamily,
         tier: Tier,
         gemColor: Color,
         frameColor: Color? = nil,
@@ -173,7 +182,7 @@ struct FavorGemView: View {
         trait: GemTrait? = nil
     ) {
         self.gemFamily   = gemFamily
-        self.frameFamily = frameFamily
+        self.frameFamily = FrameFamily.matching(gemFamily)
         self.tier        = tier
         self.gemColor    = gemColor
         self.frameColor  = frameColor
@@ -195,7 +204,7 @@ struct FavorGemView: View {
         trait: GemTrait? = nil
     ) {
         self.gemFamily   = GemFamily.from(model.gemFamily)
-        self.frameFamily = FrameFamily.from(model.frameFamily)
+        self.frameFamily = FrameFamily.matching(GemFamily.from(model.gemFamily))
         self.tier        = Tier.from(transferCount: model.transferCount)
         self.gemColor    = Color(
             hue: model.primaryHue / 360.0,
@@ -702,7 +711,7 @@ struct FavorGemView: View {
 
         return ZStack {
 
-            // ── Frame: .hue at low opacity — tints metalwork hue without
+            // ── Frame only: .hue at low opacity — tints metalwork hue without
             // touching luminance, so engraving detail is completely preserved.
             ZStack {
                 band.blendMode(.hue).opacity(0.5)
@@ -712,19 +721,6 @@ struct FavorGemView: View {
             .clipped()
             .mask(
                 Image(frameAssetName)
-                    .resizable()
-                    .frame(width: size, height: size)
-            )
-
-            // ── Gem: very light .overlay so facet geometry stays readable.
-            ZStack {
-                band.blendMode(.overlay).opacity(0.25)
-                specular.blendMode(.screen).opacity(0.35)
-            }
-            .frame(width: size, height: size)
-            .clipped()
-            .mask(
-                Image(gemAssetName)
                     .resizable()
                     .frame(width: size, height: size)
             )
@@ -935,6 +931,7 @@ struct FavorGemView: View {
 /// Enhanced gem view with pulse and rotation animations
 struct AnimatedFavorGemView: View {
     let gemFamily: GemFamily
+    /// Always derived from `gemFamily` via `FrameFamily.matching(_:)` — never set independently.
     let frameFamily: FrameFamily
     let tier: Tier
     let gemColor: Color
@@ -945,16 +942,16 @@ struct AnimatedFavorGemView: View {
     @State private var rotation: Double = 0
     @State private var shimmerPhase: Double = 0
 
+    /// Primary initializer. Frame family is always derived from gem family automatically.
     init(
         gemFamily: GemFamily,
-        frameFamily: FrameFamily,
         tier: Tier,
         gemColor: Color,
         frameColor: Color? = nil,
         size: CGFloat = 200
     ) {
         self.gemFamily   = gemFamily
-        self.frameFamily = frameFamily
+        self.frameFamily = FrameFamily.matching(gemFamily)
         self.tier        = tier
         self.gemColor    = gemColor
         self.frameColor  = frameColor
@@ -963,7 +960,7 @@ struct AnimatedFavorGemView: View {
 
     init(model: CrystalModel, size: CGFloat = 200, customFrameColor: Color? = nil) {
         self.gemFamily   = GemFamily.from(model.gemFamily)
-        self.frameFamily = FrameFamily.from(model.frameFamily)
+        self.frameFamily = FrameFamily.matching(GemFamily.from(model.gemFamily))
         self.tier        = Tier.from(transferCount: model.transferCount)
         self.gemColor    = Color(
             hue: model.primaryHue / 360.0,
@@ -995,7 +992,6 @@ struct AnimatedFavorGemView: View {
             // Gem and frame
             FavorGemView(
                 gemFamily: gemFamily,
-                frameFamily: frameFamily,
                 tier: tier,
                 gemColor: gemColor,
                 frameColor: frameColor,
@@ -1024,7 +1020,6 @@ struct AnimatedFavorGemView: View {
 /// Preview gallery showing all gem/frame family combinations across tiers
 struct FavorGemGallery: View {
     @State private var selectedGemFamily: GemFamily = .lightning
-    @State private var selectedFrameFamily: FrameFamily = .lightning
     @State private var selectedTier: Tier = .legacy
     @State private var primaryHue: Double = 200
     @State private var saturation: Double = 0.8
@@ -1054,7 +1049,6 @@ struct FavorGemGallery: View {
                     VStack(spacing: 16) {
                         AnimatedFavorGemView(
                             gemFamily: selectedGemFamily,
-                            frameFamily: selectedFrameFamily,
                             tier: selectedTier,
                             gemColor: gemColor,
                             frameColor: useCustomFrameColor ? frameColor : nil,
@@ -1066,7 +1060,7 @@ struct FavorGemGallery: View {
                                 .font(.title2.bold())
                                 .foregroundColor(.white)
 
-                            Text("\(selectedFrameFamily.displayName) frame · \(selectedTier.displayName)")
+                            Text("\(selectedFrameFamily.displayName) · \(selectedTier.displayName)")
                                 .font(.subheadline)
                                 .foregroundColor(.white.opacity(0.7))
                         }
@@ -1087,29 +1081,15 @@ struct FavorGemGallery: View {
                                         title: family.displayName,
                                         isSelected: selectedGemFamily == family,
                                         color: .cyan,
-                                        action: { selectedGemFamily = family }
+                                        action: {
+                                            selectedGemFamily = family
+                                        }
                                     )
                                 }
                             }
                         }
 
-                        // Frame family selector
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Frame Family")
-                                .font(.headline)
-                                .foregroundColor(.white)
-
-                            HStack(spacing: 12) {
-                                ForEach(FrameFamily.allCases) { family in
-                                    FamilyButton(
-                                        title: family.displayName,
-                                        isSelected: selectedFrameFamily == family,
-                                        color: .orange,
-                                        action: { selectedFrameFamily = family }
-                                    )
-                                }
-                            }
-                        }
+                        // Frame family selector (removed — frame always matches gem family)
 
                         // Tier selector
                         VStack(alignment: .leading, spacing: 12) {
@@ -1196,7 +1176,6 @@ struct FavorGemGallery: View {
                                     VStack(spacing: 8) {
                                         FavorGemView(
                                             gemFamily: selectedGemFamily,
-                                            frameFamily: selectedFrameFamily,
                                             tier: tier,
                                             gemColor: gemColor,
                                             frameColor: useCustomFrameColor ? frameColor : nil,
@@ -1288,7 +1267,6 @@ extension View {
     /// Wrap any view with a gem badge overlay
     func gemBadge(
         gemFamily: GemFamily = .lightning,
-        frameFamily: FrameFamily = .lightning,
         tier: Tier,
         color: Color,
         size: CGFloat = 40,
@@ -1298,7 +1276,6 @@ extension View {
         self.overlay(alignment: alignment) {
             FavorGemView(
                 gemFamily: gemFamily,
-                frameFamily: frameFamily,
                 tier: tier,
                 gemColor: color,
                 size: size,
@@ -1452,7 +1429,6 @@ struct FrameAssetVerificationView: View {
         Color.black.ignoresSafeArea()
         FavorGemView(
             gemFamily: .lightning,
-            frameFamily: .lightning,
             tier: .legacy,
             gemColor: .cyan,
             size: 280,
@@ -1472,7 +1448,6 @@ struct FrameAssetVerificationView: View {
                 VStack(spacing: 12) {
                     FavorGemView(
                         gemFamily: .lightning,
-                        frameFamily: .lightning,
                         tier: .bloom,
                         gemColor: .cyan,
                         size: 200,
@@ -1489,7 +1464,6 @@ struct FrameAssetVerificationView: View {
                     VStack(spacing: 12) {
                         FavorGemView(
                             gemFamily: .lightning,
-                            frameFamily: .lightning,
                             tier: .bloom,
                             gemColor: .cyan,
                             size: 200,
@@ -1513,7 +1487,6 @@ struct FrameAssetVerificationView: View {
         Color.black.ignoresSafeArea()
         AnimatedFavorGemView(
             gemFamily: .lightning,
-            frameFamily: .lightning,
             tier: .bloom,
             gemColor: .cyan,
             size: 280
@@ -1543,7 +1516,6 @@ struct FrameAssetVerificationView: View {
                     VStack(spacing: 12) {
                         FavorGemView(
                             gemFamily: .lightning,
-                            frameFamily: .lightning,
                             tier: tier,
                             gemColor: .cyan,
                             size: 140,
