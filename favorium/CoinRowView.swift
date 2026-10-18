@@ -45,5 +45,10 @@ struct CoinRowView: View {
 }
 
 #Preview {
-    CoinRowView(coin: .init(id: UUID(), serial: "FV-1234", name: "Amber Hearth", transfer_count: 3, creator_id: nil, owner_id: nil, created_at: nil))
+    // CoinSummary is Decodable-only; construct via JSON for previews
+    let json = """
+    {"id":"\(UUID().uuidString)","serial":"FV-1234","name":"Amber Hearth","transfer_count":3}
+    """.data(using: .utf8)!
+    let coin = try! JSONDecoder().decode(SupabaseService.CoinSummary.self, from: json)
+    return CoinRowView(coin: coin)
 }

@@ -61,6 +61,8 @@ enum Tier: String, CaseIterable, Identifiable {
 enum GemFamily: String, CaseIterable, Identifiable {
     case lightning
     case celestial
+    case victorian
+    case gothic
 
     var id: String { rawValue }
 
@@ -89,6 +91,8 @@ enum GemFamily: String, CaseIterable, Identifiable {
 enum FrameFamily: String, CaseIterable, Identifiable {
     case lightning
     case celestial
+    case victorian
+    case gothic
 
     var id: String { rawValue }
 
@@ -120,12 +124,12 @@ enum GemTrait: String, CaseIterable {
     case starlight    // Tiny pinpoint sparkles scattered across the surface, twinkling independently
     case rainbow      // Sweeping rainbow wash across the surface
     case iridescent   // Butterfly-wing shimmer — color shifts with the tilt
-    case frosted      // Matte icy bloom around the edges
+    case charged      // Crackling white-blue electric arcs travelling across the surface in bursts
     case ember        // Deep inner heat glow, like a coal
 
     // TODO: oiled      — dark rainbow slick like oil on water / dark opal, shifts with tilt
     // TODO: fogged     — cloudy internal haze that clears toward the center, smoke-filled look
-    // TODO: charged    — crackling white-blue electric arcs travelling across the surface in bursts
+    // TODO: frosted    — matte icy bloom around the edges (deferred — needs rethink)
     // TODO: pulsed     — slow deep heartbeat bloom from the center outward every 2–3 seconds
     // TODO: hollow     — glass sphere look: dark interior, bright rim, empty inside
     // TODO: smoked     — like frosted but warm/dark brownish, gem held in flame
@@ -141,7 +145,7 @@ enum GemTrait: String, CaseIterable {
         case .starlight:  return "Starlight"
         case .rainbow:    return "Rainbow"
         case .iridescent: return "Iridescent"
-        case .frosted:    return "Frosted"
+        case .charged:    return "Charged"
         case .ember:      return "Ember"
         }
     }
@@ -260,6 +264,15 @@ struct FavorGemView: View {
             // Pendulum tilt — rocks symmetrically from -20° to +20° and back
             withAnimation(.easeInOut(duration: 4.5).repeatForever(autoreverses: true)) {
                 tilt = 20
+            }
+            if trait == .charged {
+                startChargedAnimation()
+            }
+        }
+        .onChange(of: trait) { _, newTrait in
+            if newTrait == .charged {
+                chargedPhase = 0.0
+                startChargedAnimation()
             }
         }
     }
@@ -501,6 +514,7 @@ struct FavorGemView: View {
     // Starlight: no independent animation state needed —
     // brightness is derived from tilt angle passing through each star's trigger window.
     @State private var emberGlow: Double = 0.4       // Ember: heat pulse
+    @State private var chargedPhase: Double = 0.0    // Charged: arc travel position (0→1 looping)
 
     @ViewBuilder
     private func traitOverlay(_ trait: GemTrait) -> some View {
@@ -508,7 +522,7 @@ struct FavorGemView: View {
         case .starlight:  starlightTraitView
         case .rainbow:    rainbowTraitView
         case .iridescent: iridescentTraitView
-        case .frosted:    frostedTraitView
+        case .charged:    chargedTraitView
         case .ember:      emberTraitView
         }
     }
@@ -732,42 +746,34 @@ struct FavorGemView: View {
         }
     }
 
-    /// Frosted — a heavy icy bloom across the whole gem surface with an
-    /// un-frosted clear window at the centre.
-    private var frostedTraitView: some View {
+    private func startChargedAnimation() {
+        withAnimation(.linear(duration: 1.4).repeatForever(autoreverses: false)) {
+            chargedPhase = 1.0
+        }
+    }
+
+    /// Charged — crackling white-blue electric arcs that travel across the gem
+    /// surface in short bursts. Three arcs run at staggered phases so there is
+    /// always at least one visible at a time.
+    private var chargedTraitView: some View {
         ZStack {
-            // White frost layer — visibly desaturates and brightens the gem
+            // Ambient blue-white tint
             Image(gemAssetName)
                 .resizable()
                 .frame(width: size, height: size)
-                .colorMultiply(.white)
-                .blur(radius: size * 0.035)
-                .opacity(0.55)
-                .blendMode(.plusLighter)
-                .mask(
-                    RadialGradient(
-                        colors: [.clear, .white],
-                        center: .center,
-                        startRadius: size * 0.15,
-                        endRadius: size * 0.5
-                    )
-                )
+                .colorMultiply(Color(hue: 0.6, saturation: 0.6, brightness: 1.0))
+                .opacity(0.18)
+                .blendMode(.color)
 
-            // Fine ice-crystal sparkle dots
-            ForEach(0..<6, id: \.self) { i in
-                let angle = Double(i) * 60.0
-                let r = size * 0.32
-                Circle()
-                    .fill(Color.white)
-                    .frame(width: size * 0.04, height: size * 0.04)
-                    .blur(radius: 2)
-                    .offset(
-                        x: cos(angle * .pi / 180) * r,
-                        y: sin(angle * .pi / 180) * r
-                    )
-                    .opacity(0.8)
-                    .blendMode(.plusLighter)
-            }
+            // Arc 0 — diagonal ~20°, offset up
+            ChargedArcView(phase: chargedPhase, phaseOffset: 0.0,
+                           angle: 20,  yOffset: -size * 0.08, arcWidth: size * 0.9, arcHeight: max(size * 0.014, 2))
+            // Arc 1 — steeper ~85°, centered
+            ChargedArcView(phase: chargedPhase, phaseOffset: 1.0 / 3.0,
+                           angle: 85,  yOffset:  0,            arcWidth: size * 0.9, arcHeight: max(size * 0.014, 2))
+            // Arc 2 — shallow ~150°, offset down
+            ChargedArcView(phase: chargedPhase, phaseOffset: 2.0 / 3.0,
+                           angle: 150, yOffset:  size * 0.08,  arcWidth: size * 0.9, arcHeight: max(size * 0.014, 2))
         }
         .mask(
             Image(gemAssetName)
@@ -926,6 +932,53 @@ struct FavorGemView: View {
     }
 }
 
+// MARK: - Charged Arc Helper
+
+/// A single electric arc for the charged trait. Implemented as its own View so
+/// that `phase` is observed as a proper input, guaranteeing SwiftUI redraws on
+/// every animation tick rather than computing visibility once at build time.
+private struct ChargedArcView: View {
+    let phase: Double        // shared 0→1 looping value from the parent's @State
+    let phaseOffset: Double  // staggers this arc within the cycle (0, 1/3, 2/3)
+    let angle: Double        // rotation angle in degrees
+    let yOffset: CGFloat     // perpendicular displacement from center
+    let arcWidth: CGFloat
+    let arcHeight: CGFloat
+
+    /// Local phase for this arc — 0→1 looping, shifted by offset.
+    private var local: Double {
+        (phase + phaseOffset).truncatingRemainder(dividingBy: 1.0)
+    }
+
+    /// Smooth 0→1→0 over the first 35% of the cycle, silent the rest.
+    private var visibility: Double {
+        local < 0.35 ? sin(local / 0.35 * .pi) : 0.0
+    }
+
+    var body: some View {
+        Rectangle()
+            .fill(
+                LinearGradient(
+                    stops: [
+                        .init(color: .clear,                                                   location: 0.00),
+                        .init(color: Color(hue: 0.58, saturation: 0.35, brightness: 1.0),     location: 0.25),
+                        .init(color: .white,                                                   location: 0.50),
+                        .init(color: Color(hue: 0.58, saturation: 0.35, brightness: 1.0),     location: 0.75),
+                        .init(color: .clear,                                                   location: 1.00),
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .frame(width: arcWidth, height: arcHeight)
+            .blur(radius: arcHeight * 0.8)
+            .offset(y: yOffset)
+            .rotationEffect(.degrees(angle))
+            .opacity(visibility)
+            .blendMode(.plusLighter)
+    }
+}
+
 // MARK: - Enhanced Version with Animated Effects
 
 /// Enhanced gem view with pulse and rotation animations
@@ -1060,7 +1113,7 @@ struct FavorGemGallery: View {
                                 .font(.title2.bold())
                                 .foregroundColor(.white)
 
-                            Text("\(selectedFrameFamily.displayName) · \(selectedTier.displayName)")
+                            Text("\(selectedGemFamily.displayName) · \(selectedTier.displayName)")
                                 .font(.subheadline)
                                 .foregroundColor(.white.opacity(0.7))
                         }
@@ -1438,46 +1491,68 @@ struct FrameAssetVerificationView: View {
     }
 }
 
-#Preview("Traits") {
+#Preview("Trait: None") {
     ZStack {
         Color.black.ignoresSafeArea()
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 32) {
+        VStack(spacing: 12) {
+            FavorGemView(gemFamily: .lightning, tier: .bloom, gemColor: .cyan,
+                         size: 260, showGlow: true, showShimmer: false, trait: nil)
+            Text("None").font(.headline).foregroundColor(.white.opacity(0.4))
+        }
+    }
+}
 
-                // Baseline — no trait, for direct comparison
-                VStack(spacing: 12) {
-                    FavorGemView(
-                        gemFamily: .lightning,
-                        tier: .bloom,
-                        gemColor: .cyan,
-                        size: 200,
-                        showGlow: true,
-                        showShimmer: false,
-                        trait: nil
-                    )
-                    Text("None")
-                        .font(.headline)
-                        .foregroundColor(.white.opacity(0.4))
-                }
+#Preview("Trait: Starlight") {
+    ZStack {
+        Color.black.ignoresSafeArea()
+        VStack(spacing: 12) {
+            FavorGemView(gemFamily: .lightning, tier: .bloom, gemColor: .cyan,
+                         size: 260, showGlow: true, showShimmer: false, trait: .starlight)
+            Text("Starlight").font(.headline).foregroundColor(.white)
+        }
+    }
+}
 
-                ForEach(GemTrait.allCases, id: \.rawValue) { trait in
-                    VStack(spacing: 12) {
-                        FavorGemView(
-                            gemFamily: .lightning,
-                            tier: .bloom,
-                            gemColor: .cyan,
-                            size: 200,
-                            showGlow: true,
-                            showShimmer: false,
-                            trait: trait
-                        )
-                        Text(trait.displayName)
-                            .font(.headline)
-                            .foregroundColor(.white)
-                    }
-                }
-            }
-            .padding(40)
+#Preview("Trait: Rainbow") {
+    ZStack {
+        Color.black.ignoresSafeArea()
+        VStack(spacing: 12) {
+            FavorGemView(gemFamily: .lightning, tier: .bloom, gemColor: .cyan,
+                         size: 260, showGlow: true, showShimmer: false, trait: .rainbow)
+            Text("Rainbow").font(.headline).foregroundColor(.white)
+        }
+    }
+}
+
+#Preview("Trait: Iridescent") {
+    ZStack {
+        Color.black.ignoresSafeArea()
+        VStack(spacing: 12) {
+            FavorGemView(gemFamily: .lightning, tier: .bloom, gemColor: .cyan,
+                         size: 260, showGlow: true, showShimmer: false, trait: .iridescent)
+            Text("Iridescent").font(.headline).foregroundColor(.white)
+        }
+    }
+}
+
+#Preview("Trait: Charged") {
+    ZStack {
+        Color.black.ignoresSafeArea()
+        VStack(spacing: 12) {
+            FavorGemView(gemFamily: .lightning, tier: .bloom, gemColor: .cyan,
+                         size: 260, showGlow: true, showShimmer: false, trait: .charged)
+            Text("Charged").font(.headline).foregroundColor(.white)
+        }
+    }
+}
+
+#Preview("Trait: Ember") {
+    ZStack {
+        Color.black.ignoresSafeArea()
+        VStack(spacing: 12) {
+            FavorGemView(gemFamily: .lightning, tier: .bloom, gemColor: .cyan,
+                         size: 260, showGlow: true, showShimmer: false, trait: .ember)
+            Text("Ember").font(.headline).foregroundColor(.white)
         }
     }
 }

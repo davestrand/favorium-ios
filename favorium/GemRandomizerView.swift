@@ -40,7 +40,6 @@ struct GemRandomizerView: View {
                             // Gem - smaller for mobile
                             FavorGemView(
                                 gemFamily: currentGem.gemFamily,
-                                frameFamily: currentGem.frameFamily,
                                 tier: selectedFrameTier,
                                 gemColor: currentGem.color,
                                 frameColor: currentGem.frameColor,
@@ -563,7 +562,6 @@ struct FavoriteGemCard: View {
         VStack(spacing: 12) {
             FavorGemView(
                 gemFamily: gem.gemFamily,
-                frameFamily: gem.frameFamily,
                 tier: gem.tier,
                 gemColor: gem.color,
                 frameColor: gem.frameColor,
@@ -614,7 +612,6 @@ struct GemBatchGeneratorView: View {
                         ForEach(gems) { gem in
                             FavorGemView(
                                 gemFamily: gem.gemFamily,
-                                frameFamily: gem.frameFamily,
                                 tier: gem.tier,
                                 gemColor: gem.color,
                                 frameColor: gem.frameColor,
@@ -673,7 +670,7 @@ struct GemBatchGeneratorView: View {
             }
             .sheet(isPresented: $showingDetail) {
                 if let gem = selectedGem {
-                    GemDetailView(gem: gem)
+                    GemDebugDetailView(gem: gem)
                 }
             }
         }
@@ -692,9 +689,9 @@ struct GemBatchGeneratorView: View {
     }
 }
 
-// MARK: - Gem Detail View
+// MARK: - Gem Debug Detail View (Randomizer only)
 
-struct GemDetailView: View {
+struct GemDebugDetailView: View {
     let gem: RandomGem
     @Environment(\.dismiss) var dismiss
     
@@ -716,7 +713,6 @@ struct GemDetailView: View {
 
                     FavorGemView(
                         gemFamily: gem.gemFamily,
-                        frameFamily: gem.frameFamily,
                         tier: gem.tier,
                         gemColor: gem.color,
                         frameColor: gem.frameColor,
@@ -805,7 +801,6 @@ struct FamilySpecificGeneratorView: View {
                         VStack {
                             FavorGemView(
                                 gemFamily: gem.gemFamily,
-                                frameFamily: gem.frameFamily,
                                 tier: gem.tier,
                                 gemColor: gem.color,
                                 frameColor: gem.frameColor,
@@ -873,7 +868,6 @@ struct ShapeExplorerView: View {
                                 HStack {
                                     FavorGemView(
                                         gemFamily: gemFamily,
-                                        frameFamily: frameFamily,
                                         tier: .seed,
                                         gemColor: .cyan,
                                         size: 50,
@@ -958,7 +952,6 @@ struct GemTestingHub: View {
                     VStack(spacing: 8) {
                         FavorGemView(
                             gemFamily: .lightning,
-                            frameFamily: .lightning,
                             tier: tier,
                             gemColor: .cyan,
                             size: 140,

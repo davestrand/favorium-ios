@@ -1,1 +1,11 @@
-// Your complete updated code here
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>SUPABASE_URL</key>
+    <string>https://nnnmztslzfwpfsaagiyn.supabase.co/rest/v1/</string>
+    <key>SUPABASE_ANON_KEY</key>
+    <string>sb_publishable_SPurNrFoPcJI2_Z_FM0haw_ixl5hEyM</string>
+</dict>
+</plist>

@@ -16,7 +16,6 @@ extension FavorGemView {
     static var basicExample: some View {
         FavorGemView(
             gemFamily: .lightning,
-            frameFamily: .lightning,
             tier: .legacy,
             gemColor: .cyan,
             size: 200
@@ -27,7 +26,6 @@ extension FavorGemView {
     static var minimalExample: some View {
         FavorGemView(
             gemFamily: .lightning,
-            frameFamily: .lightning,
             tier: .seed,
             gemColor: .blue,
             size: 100,
@@ -40,7 +38,6 @@ extension FavorGemView {
     static var customColorExample: some View {
         FavorGemView(
             gemFamily: .lightning,
-            frameFamily: .lightning,
             tier: .bloom,
             gemColor: .yellow,
             frameColor: .purple,
@@ -58,7 +55,6 @@ struct GemIntegrationExamples {
     /// Efficient list item with small gem thumbnail
     struct ListItemExample: View {
         let gemFamily: GemFamily
-        let frameFamily: FrameFamily
         let tier: Tier
         let gemColor: Color
         let title: String
@@ -67,7 +63,6 @@ struct GemIntegrationExamples {
             HStack(spacing: 12) {
                 FavorGemView(
                     gemFamily: gemFamily,
-                    frameFamily: frameFamily,
                     tier: tier,
                     gemColor: gemColor,
                     size: 50,
@@ -104,7 +99,6 @@ struct GemIntegrationExamples {
                     VStack {
                         FavorGemView(
                             gemFamily: .lightning,
-                            frameFamily: .lightning,
                             tier: item.0,
                             gemColor: item.1,
                             size: 120
@@ -189,7 +183,6 @@ struct GemIntegrationExamples {
         var body: some View {
             FavorGemView(
                 gemFamily: .lightning,
-                frameFamily: .lightning,
                 tier: .legacy,
                 gemColor: .yellow,
                 size: 200
@@ -214,7 +207,6 @@ struct GemIntegrationExamples {
         var body: some View {
             FavorGemView(
                 gemFamily: .lightning,
-                frameFamily: .lightning,
                 tier: .legacy,
                 gemColor: .cyan,
                 size: 200,
@@ -258,7 +250,6 @@ struct TransferEvolutionExample: View {
         VStack(spacing: 12) {
             FavorGemView(
                 gemFamily: .lightning,
-                frameFamily: .lightning,
                 tier: tier,
                 gemColor: .cyan,
                 size: 180,
@@ -339,7 +330,6 @@ struct ColorPaletteGallery: View {
                     VStack(spacing: 8) {
                         FavorGemView(
                             gemFamily: .lightning,
-                            frameFamily: .lightning,
                             tier: .legacy,
                             gemColor: palette.1,
                             frameColor: palette.2,
@@ -369,21 +359,18 @@ struct ColorPaletteGallery: View {
         VStack(spacing: 16) {
             GemIntegrationExamples.ListItemExample(
                 gemFamily: .lightning,
-                frameFamily: .lightning,
                 tier: .seed,
                 gemColor: .cyan,
                 title: "Lightning Seed"
             )
             GemIntegrationExamples.ListItemExample(
                 gemFamily: .lightning,
-                frameFamily: .lightning,
                 tier: .bloom,
                 gemColor: .yellow,
                 title: "Lightning Bloom"
             )
             GemIntegrationExamples.ListItemExample(
                 gemFamily: .lightning,
-                frameFamily: .lightning,
                 tier: .legacy,
                 gemColor: .purple,
                 title: "Lightning Legacy"

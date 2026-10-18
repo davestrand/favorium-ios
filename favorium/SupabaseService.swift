@@ -70,7 +70,7 @@ final class SupabaseService {
     }
 
     // MARK: - Coins
-    struct CoinSummary: Decodable, Identifiable, Sendable {
+    struct CoinSummary: Decodable, Identifiable, Hashable, Sendable {
         let id: UUID
         let serial: String?
         let name: String?
