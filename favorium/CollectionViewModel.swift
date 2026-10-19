@@ -35,6 +35,14 @@ final class CollectionViewModel {
             held      = h
             originals = o
             loadState = .loaded
+        } catch is CancellationError {
+            // The pull-to-refresh gesture was cancelled (e.g. scroll bounced back
+            // before the network call finished). Restore whichever state we were in
+            // so the UI doesn't flip to an error banner for something that isn't
+            // a real failure.
+            if case .loading = loadState {
+                loadState = held.isEmpty ? .idle : .loaded
+            }
         } catch {
             loadState = .failed(error.localizedDescription)
         }

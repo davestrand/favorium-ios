@@ -276,25 +276,45 @@ struct FavorCoinPreview: View {
     private var generatedDNA: CrystalDNA {
         // Generate deterministic DNA from name for preview
         let hash = abs(name.hashValue)
-        let primaryHue = Double((hash * 137) % 360)
-        let secondaryHue = Double(((hash * 97) + 180) % 360)
-        
+        let primaryColor = Double((hash * 137) % 360)
+        let secondaryColor = Double(((hash * 97) + 180) % 360)
+        let accentColor = Double(((hash * 61) + 90) % 360)
+
         return CrystalDNA(
             identity: CrystalIdentity(
-                primaryHue: primaryHue,
-                secondaryHue: secondaryHue,
-                saturation: 0.75,
+                primaryColor: primaryColor,
+                secondaryColor: secondaryColor,
+                accentColor: accentColor,
                 materialFamily: "coloredGemstone",
                 baseForm: "diamond",
                 colorRelationship: "complementary",
                 secondaryInfluence: 0.6,
-                gemFamily: nil,
-                frameFamily: nil
+                saturation: 0.75,
+                refraction: nil,
+                luster: nil,
+                transparency: nil,
+                innerLight: nil,
+                inclusionType: nil,
+                inclusionDensity: nil,
+                facetCount: nil,
+                facetPattern: nil,
+                symmetry: nil,
+                surfaceCharacter: nil,
+                palette: nil,
+                frameHue: nil
             ),
             personality: CrystalPersonality(
                 complexityBias: 0.5,
                 orbitalAffinity: 0.4,
-                refraction: 0.7
+                evolutionFamily: nil,
+                secondaryFamily: nil,
+                metallicAffinity: nil,
+                fractalAffinity: nil,
+                spectralAffinity: nil,
+                organicAffinity: nil,
+                celestialAffinity: nil,
+                particleAffinity: nil,
+                refraction: nil
             ),
             seed: "preview-\(name.lowercased().replacingOccurrences(of: " ", with: "-"))"
         )

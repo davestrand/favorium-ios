@@ -16,8 +16,7 @@ struct GemRandomizerView: View {
     @State private var showingFavorites = false
     @State private var animateGeneration = false
     @State private var frameLevel: Double = 2.0 // 0-3 for seed, bloom, legacy, radiance
-    @State private var traitOverride: GemTrait? = nil   // nil = use gem's own trait
-    @State private var traitSlider: Double = 0           // 0 = gem's own, 1-5 = forced trait
+
     
     var body: some View {
         NavigationView {
@@ -45,12 +44,9 @@ struct GemRandomizerView: View {
                                 frameColor: currentGem.frameColor,
                                 size: 220,
                                 showGlow: true,
-                                showShimmer: true,
-                                trait: activeTrait
+                                showShimmer: true
                             )
-                            // Recreate when gem or either override changes so
-                            // trait onAppear animations always fire fresh.
-                            .id("\(currentGem.id)-\(selectedFrameTier)-\(activeTrait?.rawValue ?? "none")")
+                            .id("\(currentGem.id)-\(selectedFrameTier)")
                             .scaleEffect(animateGeneration ? 1.1 : 1.0)
                             .animation(.spring(response: 0.3, dampingFraction: 0.6), value: animateGeneration)
                             .padding(.top, 20)
@@ -68,9 +64,6 @@ struct GemRandomizerView: View {
                                 HStack(spacing: 16) {
                                     Label("\(transferCountForLevel)", systemImage: "arrow.triangle.swap")
                                     Label("Hue \(Int(currentGem.hue))°", systemImage: "paintpalette")
-                                    if let trait = activeTrait {
-                                        Label(trait.displayName, systemImage: "sparkles")
-                                    }
                                 }
                                 .font(.caption)
                                 .foregroundColor(.white.opacity(0.7))
@@ -114,63 +107,6 @@ struct GemRandomizerView: View {
                         .cornerRadius(12)
                         .padding(.horizontal)
 
-                        // Trait Picker Slider
-                        VStack(spacing: 8) {
-                            HStack {
-                                Image(systemName: "sparkles")
-                                    .foregroundColor(.purple)
-                                Text("Trait Override")
-                                    .font(.subheadline.bold())
-                                    .foregroundColor(.white)
-                                Spacer()
-                                Text(activeTrait?.displayName ?? "None")
-                                    .font(.caption)
-                                    .foregroundColor(.purple)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(Color.purple.opacity(0.2))
-                                    .cornerRadius(6)
-                            }
-
-                            HStack(spacing: 12) {
-                                Text("None")
-                                    .font(.caption2)
-                                    .foregroundColor(.white.opacity(0.6))
-
-                                Slider(value: $traitSlider, in: 0...Double(GemTrait.allCases.count), step: 1)
-                                    .tint(.purple)
-                                    .onChange(of: traitSlider) { _, newValue in
-                                        let idx = Int(newValue)
-                                        traitOverride = idx == 0 ? nil : GemTrait.allCases[idx - 1]
-                                    }
-
-                                Text(GemTrait.allCases.last?.displayName ?? "")
-                                    .font(.caption2)
-                                    .foregroundColor(.white.opacity(0.6))
-                            }
-
-                            // Trait chip row for quick tapping
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 8) {
-                                    TraitChip(label: "None", isSelected: traitOverride == nil) {
-                                        traitOverride = nil
-                                        traitSlider = 0
-                                    }
-                                    ForEach(Array(GemTrait.allCases.enumerated()), id: \.offset) { idx, trait in
-                                        TraitChip(label: trait.displayName, isSelected: traitOverride == trait) {
-                                            traitOverride = trait
-                                            traitSlider = Double(idx + 1)
-                                        }
-                                    }
-                                }
-                                .padding(.horizontal, 2)
-                            }
-                        }
-                        .padding()
-                        .background(Color.white.opacity(0.1))
-                        .cornerRadius(12)
-                        .padding(.horizontal)
-                        
                         // Stats - more compact
                         HStack(spacing: 12) {
                             StatCard(
@@ -289,11 +225,6 @@ struct GemRandomizerView: View {
         }
     }
 
-    // The trait actually sent to FavorGemView — override wins if set, else gem's own.
-    private var activeTrait: GemTrait? {
-        traitOverride ?? currentGem.trait
-    }
-    
     // Computed property to show appropriate transfer count for the level
     private var transferCountForLevel: Int {
         switch Int(frameLevel) {
@@ -319,10 +250,6 @@ struct GemRandomizerView: View {
             
             // Sync the frame level slider with the generated gem's tier
             frameLevel = Double(tierToLevel(currentGem.tier))
-
-            // Reset trait override so we see the new gem's own trait
-            traitOverride = nil
-            traitSlider = 0
             
             withAnimation {
                 animateGeneration = false
@@ -367,8 +294,6 @@ struct RandomGem: Identifiable {
     let tier: Tier
     let transferCount: Int
     let frameHue: Double
-    /// Persistent visual personality — nil for Seed, randomly assigned for Bloom+.
-    let trait: GemTrait?
 
     static var counter = 0
 
@@ -395,8 +320,6 @@ struct RandomGem: Identifiable {
         let saturation  = isWhite ? Double.random(in: 0.0...0.08) : Double.random(in: 0.6...1.0)
         let transferCount = Int.random(in: 0...60)
         let tier        = Tier.from(transferCount: transferCount)
-        // Seed gems have no trait; Bloom and above each get one assigned at birth
-        let trait: GemTrait? = tier == .seed ? nil : GemTrait.allCases.randomElement()
 
         // Frame hue — complementary, analogous, or tier-matched
         let frameHue: Double
@@ -421,8 +344,7 @@ struct RandomGem: Identifiable {
             saturation: saturation,
             tier: tier,
             transferCount: transferCount,
-            frameHue: frameHue,
-            trait: trait
+            frameHue: frameHue
         )
     }
 }
@@ -509,25 +431,6 @@ struct FavoritesView: View {
 
 // MARK: - Supporting Views
 
-struct TraitChip: View {
-    let label: String
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(label)
-                .font(.caption.weight(isSelected ? .bold : .regular))
-                .foregroundColor(isSelected ? .black : .white.opacity(0.7))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(isSelected ? Color.purple : Color.white.opacity(0.12))
-                .cornerRadius(8)
-        }
-        .buttonStyle(.plain)
-    }
-}
-
 struct StatCard: View {
     let title: String
     let value: String
@@ -567,8 +470,7 @@ struct FavoriteGemCard: View {
                 frameColor: gem.frameColor,
                 size: 140,
                 showGlow: true,
-                showShimmer: true,
-                trait: gem.trait
+                showShimmer: true
             )
 
             VStack(spacing: 4) {
@@ -718,8 +620,7 @@ struct GemDebugDetailView: View {
                         frameColor: gem.frameColor,
                         size: 320,
                         showGlow: true,
-                        showShimmer: true,
-                        trait: gem.trait
+                        showShimmer: true
                     )
 
                     VStack(spacing: 16) {
@@ -737,9 +638,6 @@ struct GemDebugDetailView: View {
                             DetailRow(label: "Gem Hue",    value: "\(Int(gem.hue))°")
                             DetailRow(label: "Saturation", value: "\(Int(gem.saturation * 100))%")
                             DetailRow(label: "Frame Hue",  value: "\(Int(gem.frameHue))°")
-                            if let trait = gem.trait {
-                                DetailRow(label: "Trait", value: trait.displayName)
-                            }
                         }
                         .padding()
                         .background(Color.white.opacity(0.05))
@@ -843,8 +741,7 @@ struct FamilySpecificGeneratorView: View {
                 saturation: base.saturation,
                 tier: base.tier,
                 transferCount: base.transferCount,
-                frameHue: base.frameHue,
-                trait: base.trait
+                frameHue: base.frameHue
             )
         }
     }

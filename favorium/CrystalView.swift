@@ -2094,19 +2094,38 @@ struct OrbitalView: View {
 #Preview("Newborn Crystal") {
     let dna = CrystalDNA(
         identity: CrystalIdentity(
-            primaryHue: 280,
-            secondaryHue: 40,
-            saturation: 0.7,
+            primaryColor: 280,
+            secondaryColor: 40,
+            accentColor: 100,
             materialFamily: "coloredGemstone",
             baseForm: "diamond",
             colorRelationship: "complementary",
             secondaryInfluence: 0.5,
-            gemFamily: nil,
-            frameFamily: nil
+            saturation: 0.7,
+            refraction: 0.8,
+            luster: nil,
+            transparency: nil,
+            innerLight: nil,
+            inclusionType: nil,
+            inclusionDensity: nil,
+            facetCount: nil,
+            facetPattern: nil,
+            symmetry: nil,
+            surfaceCharacter: nil,
+            palette: nil,
+            frameHue: nil
         ),
         personality: CrystalPersonality(
             complexityBias: 0.6,
             orbitalAffinity: 0.7,
+            evolutionFamily: nil,
+            secondaryFamily: nil,
+            metallicAffinity: nil,
+            fractalAffinity: nil,
+            spectralAffinity: nil,
+            organicAffinity: nil,
+            celestialAffinity: nil,
+            particleAffinity: nil,
             refraction: 0.8
         ),
         seed: "preview-seed-123"
@@ -2123,19 +2142,38 @@ struct OrbitalView: View {
 #Preview("Legendary Crystal") {
     let dna = CrystalDNA(
         identity: CrystalIdentity(
-            primaryHue: 200,
-            secondaryHue: 320,
-            saturation: 0.8,
+            primaryColor: 200,
+            secondaryColor: 320,
+            accentColor: 260,
             materialFamily: "spectral",
             baseForm: "diamond",
             colorRelationship: "refracted",
             secondaryInfluence: 0.7,
-            gemFamily: nil,
-            frameFamily: nil
+            saturation: 0.8,
+            refraction: 0.9,
+            luster: nil,
+            transparency: nil,
+            innerLight: nil,
+            inclusionType: nil,
+            inclusionDensity: nil,
+            facetCount: nil,
+            facetPattern: nil,
+            symmetry: nil,
+            surfaceCharacter: nil,
+            palette: nil,
+            frameHue: nil
         ),
         personality: CrystalPersonality(
             complexityBias: 0.9,
             orbitalAffinity: 0.95,
+            evolutionFamily: nil,
+            secondaryFamily: nil,
+            metallicAffinity: nil,
+            fractalAffinity: nil,
+            spectralAffinity: nil,
+            organicAffinity: nil,
+            celestialAffinity: nil,
+            particleAffinity: nil,
             refraction: 0.9
         ),
         seed: "legendary-preview-seed"
@@ -2159,19 +2197,38 @@ struct OrbitalView: View {
                 VStack(spacing: 8) {
                     let dna = CrystalDNA(
                         identity: CrystalIdentity(
-                            primaryHue: Double.random(in: 0...360),
-                            secondaryHue: Double.random(in: 0...360),
-                            saturation: 0.75,
+                            primaryColor: Double.random(in: 0...360),
+                            secondaryColor: Double.random(in: 0...360),
+                            accentColor: Double.random(in: 0...360),
                             materialFamily: "coloredGemstone",
                             baseForm: cut,
                             colorRelationship: "complementary",
                             secondaryInfluence: 0.6,
-                            gemFamily: nil,
-                            frameFamily: nil
+                            saturation: 0.75,
+                            refraction: 0.8,
+                            luster: nil,
+                            transparency: nil,
+                            innerLight: nil,
+                            inclusionType: nil,
+                            inclusionDensity: nil,
+                            facetCount: nil,
+                            facetPattern: nil,
+                            symmetry: nil,
+                            surfaceCharacter: nil,
+                            palette: nil,
+                            frameHue: nil
                         ),
                         personality: CrystalPersonality(
                             complexityBias: 0.6,
                             orbitalAffinity: 0.7,
+                            evolutionFamily: nil,
+                            secondaryFamily: nil,
+                            metallicAffinity: nil,
+                            fractalAffinity: nil,
+                            spectralAffinity: nil,
+                            organicAffinity: nil,
+                            celestialAffinity: nil,
+                            particleAffinity: nil,
                             refraction: 0.8
                         ),
                         seed: "preview-\(cut)"
@@ -2221,19 +2278,38 @@ struct CrystalTuningView: View {
     var testDNA: CrystalDNA {
         CrystalDNA(
             identity: CrystalIdentity(
-                primaryHue: primaryHue,
-                secondaryHue: primaryHue + 60,
-                saturation: colorSaturation,
+                primaryColor: primaryHue,
+                secondaryColor: primaryHue + 60,
+                accentColor: primaryHue + 120,
                 materialFamily: "coloredGemstone",
                 baseForm: "brilliant",
                 colorRelationship: "complementary",
                 secondaryInfluence: 0.3,
-                gemFamily: nil,
-                frameFamily: nil
+                saturation: colorSaturation,
+                refraction: 0.8,
+                luster: nil,
+                transparency: nil,
+                innerLight: nil,
+                inclusionType: nil,
+                inclusionDensity: nil,
+                facetCount: nil,
+                facetPattern: nil,
+                symmetry: nil,
+                surfaceCharacter: nil,
+                palette: nil,
+                frameHue: nil
             ),
             personality: CrystalPersonality(
                 complexityBias: 0.6,
                 orbitalAffinity: 0.0,
+                evolutionFamily: nil,
+                secondaryFamily: nil,
+                metallicAffinity: nil,
+                fractalAffinity: nil,
+                spectralAffinity: nil,
+                organicAffinity: nil,
+                celestialAffinity: nil,
+                particleAffinity: nil,
                 refraction: 0.8
             ),
             seed: "tuning-test"
@@ -2789,103 +2865,4 @@ struct AnyShape: Shape {
     }
 }
 
-// MARK: - Preview Helpers
-
-#Preview("Newborn Crystal") {
-    let dna = CrystalDNA(
-        identity: CrystalIdentity(
-            primaryHue: 280,
-            secondaryHue: 40,
-            saturation: 0.7,
-            materialFamily: "coloredGemstone",
-            baseForm: "diamond",
-            colorRelationship: "complementary",
-            secondaryInfluence: 0.5,
-            gemFamily: nil,
-            frameFamily: nil
-        ),
-        personality: CrystalPersonality(
-            complexityBias: 0.6,
-            orbitalAffinity: 0.7,
-            refraction: 0.8
-        ),
-        seed: "preview-seed-123"
-    )
-    
-    VStack(spacing: 20) {
-        CrystalView(dna: dna, transferCount: 0, size: 200)
-        Text("Newborn")
-            .font(.caption)
-    }
-    .padding()
-}
-
-#Preview("Legendary Crystal") {
-    let dna = CrystalDNA(
-        identity: CrystalIdentity(
-            primaryHue: 200,
-            secondaryHue: 320,
-            saturation: 0.8,
-            materialFamily: "spectral",
-            baseForm: "diamond",
-            colorRelationship: "refracted",
-            secondaryInfluence: 0.7,
-            gemFamily: nil,
-            frameFamily: nil
-        ),
-        personality: CrystalPersonality(
-            complexityBias: 0.9,
-            orbitalAffinity: 0.95,
-            refraction: 0.9
-        ),
-        seed: "legendary-preview-seed"
-    )
-    
-    VStack(spacing: 20) {
-        CrystalView(dna: dna, transferCount: 60, size: 250)
-        Text("Legendary • 60 Transfers")
-            .font(.caption)
-    }
-    .padding()
-    .background(Color.black)
-}
-#Preview("Various Cuts") {
-    let cuts = ["diamond", "heart", "pear", "emerald", "star", "cushion", "octahedron", "rose"]
-    
-    ScrollView {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 30) {
-            ForEach(cuts, id: \.self) { cut in
-                VStack(spacing: 8) {
-                    let dna = CrystalDNA(
-                        identity: CrystalIdentity(
-                            primaryHue: Double.random(in: 0...360),
-                            secondaryHue: Double.random(in: 0...360),
-                            saturation: 0.75,
-                            materialFamily: "coloredGemstone",
-                            baseForm: cut,
-                            colorRelationship: "complementary",
-                            secondaryInfluence: 0.6,
-                            gemFamily: nil,
-                            frameFamily: nil
-                        ),
-                        personality: CrystalPersonality(
-                            complexityBias: 0.6,
-                            orbitalAffinity: 0.7,
-                            refraction: 0.8
-                        ),
-                        seed: "preview-\(cut)"
-                    )
-                    
-                    CrystalView(dna: dna, transferCount: 10, size: 120)
-                    
-                    Text(cut.capitalized)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-        }
-        .padding()
-    }
-    .background(Color(.systemGroupedBackground))
-}
 

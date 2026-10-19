@@ -78,11 +78,25 @@ final class SupabaseService {
         let creator_id: UUID?
         let owner_id: UUID?
         let created_at: String?
+        let dna: JSONObject?
+
+        // Hashable conformance — dna (JSONObject) doesn't auto-conform, so exclude it.
+        static func == (lhs: CoinSummary, rhs: CoinSummary) -> Bool { lhs.id == rhs.id }
+        func hash(into hasher: inout Hasher) { hasher.combine(id) }
+
+        /// Decode the dna blob into a GemDNA, handling both Layer-1 and Layer-2 shapes.
+        /// Returns nil only when dna is entirely absent.
+        var gemDNA: GemDNA? {
+            guard let dna,
+                  let encoded = try? JSONEncoder().encode(dna)
+            else { return nil }
+            return try? JSONDecoder().decode(GemDNA.self, from: encoded)
+        }
     }
     func myFavors(userId: UUID) async throws -> [CoinSummary] {
         let response = try await client.database
             .from("coins")
-            .select("id,serial,name,transfer_count,creator_id,owner_id,created_at")
+            .select("id,serial,name,transfer_count,creator_id,owner_id,created_at,dna")
             .eq("owner_id", value: userId.uuidString)
             .order("created_at", ascending: false)
             .execute()
@@ -93,7 +107,7 @@ final class SupabaseService {
     func myOriginals(userId: UUID) async throws -> [CoinSummary] {
         let response = try await client.database
             .from("coins")
-            .select("id,serial,name,transfer_count,creator_id,owner_id,created_at")
+            .select("id,serial,name,transfer_count,creator_id,owner_id,created_at,dna")
             .eq("creator_id", value: userId.uuidString)
             .order("created_at", ascending: false)
             .execute()
@@ -102,38 +116,134 @@ final class SupabaseService {
     }
 
     // MARK: - Journey RPC
+
+    /// Flat Layer-1 DNA keys written by mint_coin (dna_version 2).
+    /// Also used as the canonical gem identity on both platforms.
+    struct GemDNA: Decodable, Sendable {
+        let gemFamily: String       // "lightning" | "celestial" | "victorian" | "gothic"
+        let primaryHue: Double      // 0–360
+        let saturation: Double      // 0–1
+        let trait: String?          // nil until first Bloom transfer
+        let seed: String
+
+        // Layer-2 nested block — present on dna_version 2 rows and the 6 repaired rows.
+        // Decoded separately; use gemFamily / primaryHue from Layer 1 when available.
+        struct Identity: Decodable, Sendable {
+            let primaryColor: Double
+            let secondaryColor: Double
+            let accentColor: Double
+            let saturation: Double?
+            let baseForm: String
+            let materialFamily: String?
+            let colorRelationship: String?
+            let secondaryInfluence: Double?
+            let refraction: Double?
+            let frameHue: Double?
+
+            enum CodingKeys: String, CodingKey {
+                case primaryColor       = "primary_color"
+                case secondaryColor     = "secondary_color"
+                case accentColor        = "accent_color"
+                case saturation
+                case baseForm           = "base_form"
+                case materialFamily     = "material_family"
+                case colorRelationship  = "color_relationship"
+                case secondaryInfluence = "secondary_influence"
+                case refraction
+                case frameHue           = "frame_hue"
+            }
+        }
+
+        struct Personality: Decodable, Sendable {
+            let complexityBias: Double?
+            let orbitalAffinity: Double?
+            let evolutionFamily: String?
+
+            enum CodingKeys: String, CodingKey {
+                case complexityBias   = "complexity_bias"
+                case orbitalAffinity  = "orbital_affinity"
+                case evolutionFamily  = "evolution_family"
+            }
+        }
+
+        let identity: Identity?
+        let personality: Personality?
+
+        // Resolved values — Layer 1 wins, fall back to Layer 2
+        var resolvedFamily: String  { gemFamily.isEmpty ? (identity?.baseForm ?? "lightning") : gemFamily }
+        var resolvedHue: Double     { primaryHue > 0 || !gemFamily.isEmpty ? primaryHue : (identity?.primaryColor ?? 45) }
+        var resolvedSaturation: Double { saturation > 0 ? saturation : (identity?.saturation ?? 0.7) }
+
+        // Custom init so Layer-1 keys decode gracefully when absent (repair rows)
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            gemFamily   = (try? c.decode(String.self,  forKey: .gemFamily))   ?? ""
+            primaryHue  = (try? c.decode(Double.self,  forKey: .primaryHue))  ?? 0
+            saturation  = (try? c.decode(Double.self,  forKey: .saturation))  ?? 0
+            trait       = try? c.decode(String.self,   forKey: .trait)
+            seed        = (try? c.decode(String.self,  forKey: .seed))        ?? ""
+            identity    = try? c.decode(Identity.self,    forKey: .identity)
+            personality = try? c.decode(Personality.self, forKey: .personality)
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case gemFamily, primaryHue, saturation, trait, seed, identity, personality
+        }
+    }
+
     struct CoinHistoryItem: Decodable, Identifiable, Sendable {
         let id: Int64
-        let event_type: String
+        let eventType: String       // "minted" | "transferred"
         let description: String?
-        let created_at: String
-        let from_name: String?
-        let to_name: String?
-        let is_from_me: Bool?
-        let is_to_me: Bool?
+        let createdAt: String
+        let fromName: String?
+        let toName: String?
+        let isFromMe: Bool?         // nullable when called without user JWT
+        let isToMe: Bool?           // nullable when called without user JWT
+
+        enum CodingKeys: String, CodingKey {
+            case id, description
+            case eventType  = "event_type"
+            case createdAt  = "created_at"
+            case fromName   = "from_name"
+            case toName     = "to_name"
+            case isFromMe   = "is_from_me"
+            case isToMe     = "is_to_me"
+        }
     }
+
     struct CoinJourneyPayload: Decodable, Sendable {
         let id: UUID
         let serial: String
         let name: String
-        let traits: JSONObject?
-        let dna: JSONObject?
+        // traits omitted — always empty object, ignored by both platforms
+        let dna: GemDNA?            // nullable for hand-repaired / legacy rows
         let seed: String?
-        let dna_version: Int
-        let transfer_count: Int
-        let created_at: String
-        let creator_name: String?
-        let owner_name: String?
-        let is_owner: Bool
-        let is_creator: Bool
+        let dnaVersion: Int
+        let transferCount: Int
+        let createdAt: String
+        let creatorName: String?
+        let ownerName: String?
+        let isOwner: Bool?          // null when called without user JWT
+        let isCreator: Bool?        // null when called without user JWT
         let history: [CoinHistoryItem]
+
+        enum CodingKeys: String, CodingKey {
+            case id, serial, name, dna, seed, history
+            case dnaVersion   = "dna_version"
+            case transferCount = "transfer_count"
+            case createdAt    = "created_at"
+            case creatorName  = "creator_name"
+            case ownerName    = "owner_name"
+            case isOwner      = "is_owner"
+            case isCreator    = "is_creator"
+        }
     }
 
     func coinJourney(coinID: UUID) async throws -> CoinJourneyPayload {
         struct CoinJourneyParams: Encodable {
             let p_coin_id: String
         }
-        
         let response = try await client.database
             .rpc("coin_journey", params: CoinJourneyParams(p_coin_id: coinID.uuidString))
             .execute()

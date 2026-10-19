@@ -88,45 +88,33 @@ struct MagicalGemCore: View {
     @State private var dispersePhase: Double = 0
     @State private var rotation3D: Double = 0
     
-    // Surface effects unlock at 5+ transfers
-    private var hasSurfaceEffect: Bool {
-        model.transferCount >= 5
-    }
-    
-    // Surface effect - deterministic based on model, or forced
-    // Tiered system:
-    // - 5-29 transfers: Common effects (subtle)
-    // - 30-49 transfers: Rare effects (noticeable)
-    // - 50+ transfers: LEGENDARY effects (special)
+    // Surface effect - deterministic based on tier, or forced
+    // Mirrors the canonical Tier system from FavorGemView:
+    // - Seed     (0–4):   no surface effect
+    // - Bloom    (5–14):  common effects (subtle)
+    // - Legacy   (15–29): rare effects (noticeable)
+    // - Radiance (30+):   legendary effects (special)
     private var surfaceEffect: SurfaceEffect? {
         // Always show if forced (for preview/testing)
         if let forced = forcedSurfaceEffect {
             return forced
         }
-        
-        // Only show surface effects at 5+ transfers
-        guard hasSurfaceEffect else {
-            return nil
-        }
-        
-        // Use the model's seed to deterministically pick an effect
+
         let hash = abs(model.seed.hashValue)
-        
-        // Legendary effects for 50+ transfers
-        if model.transferCount >= 50 {
-            let legendaryEffects: [SurfaceEffect] = [.constellation, .aurora, .prismatic]
-            return legendaryEffects[hash % legendaryEffects.count]
+
+        switch Tier.from(transferCount: model.transferCount) {
+        case .seed:
+            return nil
+        case .bloom:
+            let effects: [SurfaceEffect] = [.shimmer, .glow, .sparkle]
+            return effects[hash % effects.count]
+        case .legacy:
+            let effects: [SurfaceEffect] = [.holographic, .rainbow, .pulse]
+            return effects[hash % effects.count]
+        case .radiance:
+            let effects: [SurfaceEffect] = [.constellation, .aurora, .prismatic]
+            return effects[hash % effects.count]
         }
-        
-        // Rare effects for 30-49 transfers
-        if model.transferCount >= 30 {
-            let rareEffects: [SurfaceEffect] = [.holographic, .rainbow, .pulse]
-            return rareEffects[hash % rareEffects.count]
-        }
-        
-        // Common effects for 5-29 transfers
-        let commonEffects: [SurfaceEffect] = [.shimmer, .glow, .sparkle]
-        return commonEffects[hash % commonEffects.count]
     }
     
     var body: some View {
@@ -541,17 +529,17 @@ struct MagicalGemCore: View {
 // MARK: - Surface Effect Types (Now Subtle)
 
 enum SurfaceEffect: String, CaseIterable {
-    // Common effects (5-29 transfers) - Subtle enhancements
+    // Bloom effects (5–14 transfers) - Subtle enhancements
     case shimmer = "Shimmer"
     case glow = "Glow"
     case sparkle = "Sparkle"
-    
-    // Rare effects (30-49 transfers) - More noticeable but still classy
+
+    // Legacy effects (15–29 transfers) - More noticeable but still classy
     case holographic = "Holographic"
     case rainbow = "Rainbow"
     case pulse = "Pulse"
-    
-    // Legendary effects (50+ transfers) - Special but not overwhelming
+
+    // Radiance effects (30+ transfers) - Special but not overwhelming
     case aurora = "Aurora"
     case constellation = "Constellation"
     case prismatic = "Prismatic"
@@ -563,32 +551,37 @@ enum SurfaceEffect: String, CaseIterable {
 struct DecorativeFrame: View {
     let model: CrystalModel
     let size: CGFloat
-    
+
     @State private var rotation: Double = 0
-    
-    private var frameColor: Color {
-        // Frame color based on tier
-        if model.transferCount >= 50 {
-            return Color(hue: 0.15, saturation: 0.8, brightness: 1.0) // Gold
-        } else if model.transferCount >= 30 {
-            return Color(hue: 0.0, saturation: 0.0, brightness: 0.8) // Silver
-        } else if model.transferCount >= 5 {
-            return Color(hue: 0.08, saturation: 0.6, brightness: 0.7) // Bronze
-        }
-        return Color.clear
+
+    private var tier: Tier {
+        Tier.from(transferCount: model.transferCount)
     }
-    
+
+    private var frameColor: Color {
+        let hue = model.frameHue / 360.0
+        switch tier {
+        case .seed:     return Color.clear
+        case .bloom:    return Color(hue: hue, saturation: 0.55, brightness: 0.75)
+        case .legacy:   return Color(hue: hue, saturation: 0.45, brightness: 0.90)
+        case .radiance: return Color(hue: hue, saturation: 0.80, brightness: 1.00)
+        }
+    }
+
     var body: some View {
         ZStack {
-            if model.transferCount >= 50 {
-                // LEGENDARY - Wings and elaborate decorations
-                legendaryFrame
-            } else if model.transferCount >= 30 {
-                // RARE - Ornate frame with details
-                rareFrame
-            } else if model.transferCount >= 5 {
-                // COMMON - Simple elegant border
+            switch tier {
+            case .seed:
+                EmptyView()
+            case .bloom:
+                // Simple elegant border
                 commonFrame
+            case .legacy:
+                // Ornate frame with details
+                rareFrame
+            case .radiance:
+                // Elaborate decorations
+                legendaryFrame
             }
         }
         .onAppear {
@@ -2161,7 +2154,7 @@ struct MagicalCrystalPlayground: View {
                         .font(.title3.bold())
                         .foregroundColor(.white)
                     
-                    Text("Hue: \(Int(currentDNA.identity.primaryHue))° • Sat: \(Int(currentDNA.identity.saturation * 100))%")
+                    Text("Hue: \(Int(currentDNA.identity.primaryHue))° • Sat: \(Int((currentDNA.identity.saturation ?? 1.0) * 100))%")
                         .font(.caption)
                         .foregroundColor(.white.opacity(0.7))
                     
@@ -2169,8 +2162,8 @@ struct MagicalCrystalPlayground: View {
                         Text("Transfers: \(transferCount)")
                             .font(.caption2)
                             .foregroundColor(.white.opacity(0.5))
-                        
-                        if transferCount >= 5 {
+
+                        if Tier.from(transferCount: transferCount) != .seed {
                             Image(systemName: "sparkles")
                                 .font(.caption2)
                                 .foregroundColor(.yellow)
@@ -2181,22 +2174,25 @@ struct MagicalCrystalPlayground: View {
                         Text("Effect: \(effect.rawValue)")
                             .font(.caption2)
                             .foregroundColor(.cyan)
-                    } else if transferCount >= 50 {
-                        Text("⭐️ LEGENDARY Effect Active ⭐️")
-                            .font(.caption2.bold())
-                            .foregroundColor(.yellow)
-                    } else if transferCount >= 30 {
-                        Text("💎 RARE Effect Active")
-                            .font(.caption2.bold())
-                            .foregroundColor(.purple)
-                    } else if transferCount >= 5 {
-                        Text("✨ Surface Effect: Active")
-                            .font(.caption2)
-                            .foregroundColor(.green)
                     } else {
-                        Text("Surface Effect: Locked (5+ transfers)")
-                            .font(.caption2)
-                            .foregroundColor(.gray)
+                        switch Tier.from(transferCount: transferCount) {
+                        case .radiance:
+                            Text("⭐️ Radiance Effect Active ⭐️")
+                                .font(.caption2.bold())
+                                .foregroundColor(.yellow)
+                        case .legacy:
+                            Text("💎 Legacy Effect Active")
+                                .font(.caption2.bold())
+                                .foregroundColor(.purple)
+                        case .bloom:
+                            Text("✨ Bloom Effect Active")
+                                .font(.caption2)
+                                .foregroundColor(.green)
+                        case .seed:
+                            Text("Surface Effect: Locked (5+ transfers)")
+                                .font(.caption2)
+                                .foregroundColor(.gray)
+                        }
                     }
                 }
                 
@@ -2290,19 +2286,37 @@ struct MagicalCrystalPlayground: View {
         
         return CrystalDNA(
             identity: CrystalIdentity(
-                primaryHue: primaryHue,
-                secondaryHue: secondaryHue,
-                saturation: Double.random(in: 0.6...1.0),
+                primaryColor: primaryHue,
+                secondaryColor: secondaryHue,
+                accentColor: (secondaryHue + 30).truncatingRemainder(dividingBy: 360),
                 materialFamily: ["spectral", "coloredGemstone", "opalescent"].randomElement()!,
                 baseForm: shapes.randomElement()!,
                 colorRelationship: relationship,
                 secondaryInfluence: Double.random(in: 0.3...0.8),
-                gemFamily: GemFamily.allCases.randomElement()?.rawValue,
-                frameFamily: FrameFamily.allCases.randomElement()?.rawValue
+                saturation: Double.random(in: 0.6...1.0),
+                refraction: Double.random(in: 0.6...1.0),
+                luster: nil,
+                transparency: nil,
+                innerLight: nil,
+                inclusionType: nil,
+                inclusionDensity: nil,
+                facetCount: nil,
+                facetPattern: nil,
+                symmetry: nil,
+                surfaceCharacter: nil,
+                palette: nil, frameHue: 0.1
             ),
             personality: CrystalPersonality(
                 complexityBias: Double.random(in: 0.5...1.0),
                 orbitalAffinity: Double.random(in: 0.7...1.0),
+                evolutionFamily: nil,
+                secondaryFamily: nil,
+                metallicAffinity: nil,
+                fractalAffinity: nil,
+                spectralAffinity: nil,
+                organicAffinity: nil,
+                celestialAffinity: nil,
+                particleAffinity: nil,
                 refraction: Double.random(in: 0.6...1.0)
             ),
             seed: UUID().uuidString

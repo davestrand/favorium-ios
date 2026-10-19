@@ -8,6 +8,7 @@
 
 import SwiftUI
 import Helpers
+import Supabase
 
 // MARK: - View Model
 
@@ -28,6 +29,8 @@ final class GemDetailViewModel {
             let result = try await SupabaseService.shared.coinJourney(coinID: coinId)
             journey = result
             loadState = .loaded
+        } catch is CancellationError {
+            if case .loading = loadState { loadState = .idle }
         } catch {
             loadState = .failed(error.localizedDescription)
         }
@@ -68,7 +71,7 @@ struct GemDetailView: View {
                 SendGemView(
                     coinId: coinId,
                     coinName: j.name,
-                    transferCount: j.transfer_count,
+                    transferCount: j.transferCount,
                     userId: userId
                 ) {
                     Task { await vm.load(coinId: coinId) }
@@ -97,7 +100,7 @@ struct GemDetailView: View {
                     .padding(.bottom, 20)
 
                 // ── Send button (only when user is current owner) ─────
-                if j.is_owner {
+                if j.isOwner == true {
                     sendButton
                         .padding(.horizontal, 24)
                         .padding(.bottom, 28)
@@ -149,22 +152,19 @@ struct GemDetailView: View {
     // MARK: - Hero
 
     private func heroGem(_ j: SupabaseService.CoinJourneyPayload) -> some View {
-        let tier = Tier.from(transferCount: j.transfer_count)
-        let gemFamily = GemFamily.from(dnaString(j.dna, key: "gemFamily"))
-        let hue = dnaDouble(j.dna, key: "primaryHue") ?? 200.0
-        let sat = dnaDouble(j.dna, key: "saturation") ?? 0.8
-        let gemColor = Color(hue: hue / 360.0, saturation: sat, brightness: 0.9)
+        let hue = j.dna?.resolvedHue ?? 45
+        let sat = j.dna?.resolvedSaturation ?? 0.7
+        let glowColor = Color(hue: hue / 360.0, saturation: sat, brightness: 0.9)
+        let family = GemFamily.from(j.dna?.resolvedFamily)
+        let tier = Tier.from(transferCount: j.transferCount)
 
         return GeometryReader { geo in
-            // Scale the hero relative to screen width so it fits small iPhones.
-            // 220pt looks great at 390pt wide (iPhone 15); clamp lower for SE/mini.
             let gemSize = min(220, geo.size.width * 0.56)
             let glowSize = gemSize * 1.55
 
             ZStack {
-                // Radial glow behind the gem
                 RadialGradient(
-                    colors: [gemColor.opacity(0.20), FavoriumTheme.background],
+                    colors: [glowColor.opacity(0.20), FavoriumTheme.background],
                     center: .center,
                     startRadius: gemSize * 0.18,
                     endRadius: glowSize * 0.5
@@ -173,30 +173,31 @@ struct GemDetailView: View {
                 .blur(radius: 30)
 
                 AnimatedFavorGemView(
-                    gemFamily: gemFamily,
+                    gemFamily: family,
                     tier: tier,
-                    gemColor: gemColor,
+                    gemColor: glowColor,
                     size: gemSize
                 )
             }
             .frame(maxWidth: .infinity)
             .frame(width: geo.size.width, height: gemSize * 1.2)
         }
-        // Reserve height proportional to screen width so GeometryReader has room
         .frame(height: min(264, UIScreen.main.bounds.width * 0.67))
     }
 
     // MARK: - Gem meta
 
     private func gemMeta(_ j: SupabaseService.CoinJourneyPayload) -> some View {
-        VStack(spacing: 10) {
+        let tier = Tier.from(transferCount: j.transferCount)
+        let family = GemFamily.from(j.dna?.resolvedFamily)
+
+        return VStack(spacing: 10) {
             Text(j.name)
                 .font(.system(size: 28, weight: .bold, design: .serif))
                 .foregroundColor(FavoriumTheme.ivory)
                 .multilineTextAlignment(.center)
 
-            // "One of your original gems" badge
-            if j.is_creator {
+            if j.isCreator == true {
                 Text("One of your original gems")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(FavoriumTheme.gold)
@@ -207,31 +208,40 @@ struct GemDetailView: View {
                     .overlay(Capsule().stroke(FavoriumTheme.gold.opacity(0.4), lineWidth: 1))
             }
 
-            // Current holder
-            let tier = Tier.from(transferCount: j.transfer_count)
             Text(holderLabel(j))
                 .font(FavoriumTheme.captionFont)
                 .foregroundColor(FavoriumTheme.ivoryDim)
                 .multilineTextAlignment(.center)
 
-            // Family · Tier
             HStack(spacing: 6) {
-                Text(GemFamily.from(dnaString(j.dna, key: "gemFamily")).displayName)
+                Text(family.displayName)
                 Circle().frame(width: 3, height: 3)
                 Text(tier.displayName)
             }
             .font(.system(size: 13))
             .foregroundColor(tier.defaultColor)
+
+            // Trait badge — appears at Bloom tier
+            if let trait = j.dna?.trait {
+                Text(trait.capitalized)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(FavoriumTheme.teal)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 4)
+                    .background(FavoriumTheme.teal.opacity(0.12))
+                    .clipShape(Capsule())
+            }
         }
         .frame(maxWidth: .infinity)
     }
 
     private func holderLabel(_ j: SupabaseService.CoinJourneyPayload) -> String {
-        if j.is_owner {
-            return "In your possession · \(j.transfer_count) exchanges"
+        let count = j.transferCount
+        if j.isOwner == true {
+            return "In your possession · \(count) exchanges"
         }
-        let holder = j.owner_name ?? "someone"
-        return "Currently with \(holder) · \(j.transfer_count) exchanges"
+        let holder = j.ownerName ?? "someone"
+        return "Currently with \(holder) · \(count) exchanges"
     }
 
     // MARK: - Send button
@@ -277,8 +287,8 @@ struct GemDetailView: View {
             .padding(.bottom, 16)
 
             // Timeline entries
-            let history = j.history  // already ordered newest-first from RPC
-            let visibleCutoff = 2    // show first 2, collapse the rest
+            let history = j.history  // ascending by created_at from RPC
+            let visibleCutoff = 2
 
             if history.isEmpty {
                 Text("No exchanges yet.")
@@ -346,7 +356,7 @@ struct GemDetailView: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(FavoriumTheme.ivory)
                     Spacer()
-                    Text(formattedDate(item.created_at))
+                    Text(formattedDate(item.createdAt))
                         .font(.system(size: 12))
                         .foregroundColor(FavoriumTheme.ivoryDim)
                 }
@@ -362,17 +372,17 @@ struct GemDetailView: View {
     }
 
     private func transferLabel(_ item: SupabaseService.CoinHistoryItem) -> String {
-        switch item.event_type {
-        case "created":
-            return "Created for you"
+        switch item.eventType {
+        case "minted":
+            return "Brought into the world"
         case "transferred":
-            let from = item.from_name ?? "Someone"
-            let to   = item.to_name   ?? "someone"
-            if item.is_from_me == true { return "You → \(to)" }
-            if item.is_to_me   == true { return "\(from) → You" }
+            let from = item.fromName ?? "Someone"
+            let to   = item.toName   ?? "someone"
+            if item.isFromMe == true { return "You → \(to)" }
+            if item.isToMe   == true { return "\(from) → You" }
             return "\(from) → \(to)"
         default:
-            return item.event_type.capitalized
+            return item.eventType.capitalized
         }
     }
 
@@ -465,32 +475,6 @@ struct GemDetailView: View {
     }
 }
 
-// MARK: - DNA reading helpers
-// JSONObject is [String: AnyJSON] from the Supabase Helpers module.
-// We extract typed values via the AnyJSON description/Codable round-trip
-// rather than pattern-matching internal cases that may change.
-
-private func dnaString(_ dna: JSONObject?, key: String) -> String? {
-    guard let dna else { return nil }
-    // AnyJSON conforms to CustomStringConvertible; use JSON round-trip for safety
-    guard let raw = dna[key] else { return nil }
-    if let encoded = try? JSONEncoder().encode(raw),
-       let str = String(data: encoded, encoding: .utf8) {
-        // Encoded strings arrive as JSON-quoted e.g. `"lightning"` — strip quotes
-        return str.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
-    }
-    return nil
-}
-
-private func dnaDouble(_ dna: JSONObject?, key: String) -> Double? {
-    guard let dna else { return nil }
-    guard let raw = dna[key] else { return nil }
-    if let encoded = try? JSONEncoder().encode(raw),
-       let d = try? JSONDecoder().decode(Double.self, from: encoded) {
-        return d
-    }
-    return nil
-}
 
 #Preview("Gem Detail") {
     NavigationStack {

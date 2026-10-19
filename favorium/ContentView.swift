@@ -144,7 +144,9 @@ struct StarfieldHeader: View {
                         endRadius: 200
                     )
                 )
-                .frame(width: 380, height: 140)
+                .frame(maxWidth: .infinity)
+                .frame(height: 140)
+                .clipped()
                 .offset(y: -10)
                 .blur(radius: 20)
 

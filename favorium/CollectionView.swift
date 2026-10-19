@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import Supabase
 
 struct CollectionView: View {
     @Environment(AppViewModel.self) private var appVM
@@ -34,6 +35,7 @@ struct CollectionView: View {
                         heldSection
                             .padding(.horizontal, 16)
                             .padding(.bottom, 28)
+                            .frame(maxWidth: .infinity)
 
                         // ── Send a gem CTA (only when user holds gems) ───
                         if !vm.held.isEmpty {
@@ -46,7 +48,9 @@ struct CollectionView: View {
                         originalsSection
                             .padding(.horizontal, 16)
                             .padding(.bottom, 40)
+                            .frame(maxWidth: .infinity)
                     }
+                    .frame(maxWidth: .infinity)  // anchor the VStack to scroll view width
                 }
                 .refreshable {
                     if let uid = appVM.userId {
@@ -88,7 +92,7 @@ struct CollectionView: View {
             VStack(alignment: .leading, spacing: 2) {
                 // Decorative arc + stars via overlay
                 ZStack(alignment: .leading) {
-                    // Subtle arc glow
+                    // Subtle arc glow — use relative sizing so it never overflows
                     Ellipse()
                         .fill(
                             RadialGradient(
@@ -96,9 +100,11 @@ struct CollectionView: View {
                                 center: .center, startRadius: 5, endRadius: 180
                             )
                         )
-                        .frame(width: 300, height: 80)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 80)
                         .blur(radius: 18)
                         .offset(x: 0, y: -10)
+                        .clipped()
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Favorium")
@@ -269,23 +275,30 @@ private struct GemGridCell: View {
     let isOriginal: Bool
     let onTap: () -> Void
 
-    private var tier: Tier { Tier.from(transferCount: coin.transfer_count ?? 0) }
-    private var gemColor: Color { tier.defaultColor }
-    private var gemFamily: GemFamily { .lightning }  // fallback until DNA decoded from coin
+    private var transferCount: Int { coin.transfer_count ?? 0 }
+    private var tier: Tier { Tier.from(transferCount: transferCount) }
+    private var resolvedDNA: SupabaseService.GemDNA? { coin.gemDNA }
+    private var gemFamily: GemFamily { GemFamily.from(resolvedDNA?.resolvedFamily) }
+    private var gemColor: Color {
+        guard let dna = resolvedDNA else { return tier.defaultColor }
+        return Color(hue: dna.resolvedHue / 360.0, saturation: dna.resolvedSaturation, brightness: 0.9)
+    }
 
     var body: some View {
         Button(action: onTap) {
             VStack(spacing: 0) {
                 ZStack(alignment: .topTrailing) {
-                    // Gem
-                    FavorGemView(
-                        gemFamily: gemFamily,
-                        tier: tier,
-                        gemColor: gemColor,
-                        size: 110,
-                        showGlow: true,
-                        showShimmer: false
-                    )
+                    // Gem — asset-based renderer
+                    Group {
+                        FavorGemView(
+                            gemFamily: gemFamily,
+                            tier: tier,
+                            gemColor: gemColor,
+                            size: 110,
+                            showGlow: true,
+                            showShimmer: false
+                        )
+                    }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
 
@@ -339,14 +352,20 @@ private struct OriginalGemRow: View {
     let isAway: Bool
     let onTap: () -> Void
 
-    private var tier: Tier { Tier.from(transferCount: coin.transfer_count ?? 0) }
-    private var gemColor: Color { tier.defaultColor }
+    private var transferCount: Int { coin.transfer_count ?? 0 }
+    private var tier: Tier { Tier.from(transferCount: transferCount) }
+    private var resolvedDNA: SupabaseService.GemDNA? { coin.gemDNA }
+    private var gemFamily: GemFamily { GemFamily.from(resolvedDNA?.resolvedFamily) }
+    private var gemColor: Color {
+        guard let dna = resolvedDNA else { return tier.defaultColor }
+        return Color(hue: dna.resolvedHue / 360.0, saturation: dna.resolvedSaturation, brightness: 0.9)
+    }
 
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 14) {
                 FavorGemView(
-                    gemFamily: .lightning,
+                    gemFamily: gemFamily,
                     tier: tier,
                     gemColor: gemColor,
                     size: 54,
@@ -388,7 +407,7 @@ private struct OriginalGemRow: View {
     private var holderSubtitle: String {
         let count = coin.transfer_count ?? 0
         let exchangeLabel = count == 1 ? "1 exchange" : "\(count) exchanges"
-        return "\(exchangeLabel)"   // owner_name not available in CoinSummary; journey will show it
+        return "\(exchangeLabel)"
     }
 
     private var awayBadge: some View {
@@ -422,10 +441,15 @@ private struct GemPickerForSendView: View {
                     } label: {
                         HStack(spacing: 14) {
                             let tier = Tier.from(transferCount: coin.transfer_count ?? 0)
+                            let dna  = coin.gemDNA
+                            let family = GemFamily.from(dna?.resolvedFamily)
+                            let gemColor = dna.map {
+                                Color(hue: $0.resolvedHue / 360.0, saturation: $0.resolvedSaturation, brightness: 0.9)
+                            } ?? tier.defaultColor
                             FavorGemView(
-                                gemFamily: .lightning,
+                                gemFamily: family,
                                 tier: tier,
-                                gemColor: tier.defaultColor,
+                                gemColor: gemColor,
                                 size: 46,
                                 showGlow: false,
                                 showShimmer: false
@@ -519,6 +543,67 @@ private struct ShimmerModifier: ViewModifier {
                 }
             }
     }
+}
+
+// MARK: - DNA helpers
+// CoinSummary carries dna as a JSONObject. Decode it once into GemDNA
+// (which handles both Layer-1 flat keys and Layer-2 nested identity).
+
+private func dnaString(_ dna: JSONObject?, nestedKey: String) -> String? {
+    guard let dna,
+          let identityRaw = dna["identity"],
+          let identityEncoded = try? JSONEncoder().encode(identityRaw),
+          let identityObj = try? JSONDecoder().decode([String: AnyJSON].self, from: identityEncoded),
+          let raw = identityObj[nestedKey],
+          let encoded = try? JSONEncoder().encode(raw),
+          let str = String(data: encoded, encoding: .utf8)
+    else { return nil }
+    return str.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+}
+
+private func dnaDouble(_ dna: JSONObject?, nestedKey: String) -> Double? {
+    guard let dna,
+          let identityRaw = dna["identity"],
+          let identityEncoded = try? JSONEncoder().encode(identityRaw),
+          let identityObj = try? JSONDecoder().decode([String: AnyJSON].self, from: identityEncoded),
+          let raw = identityObj[nestedKey],
+          let encoded = try? JSONEncoder().encode(raw),
+          let d = try? JSONDecoder().decode(Double.self, from: encoded)
+    else { return nil }
+    return d
+}
+
+/// Decode the full CrystalDNA from a coin's JSONObject blob.
+/// Returns nil when the blob is missing or malformed so callers can fall back gracefully.
+///
+/// Resilience rules (in order):
+/// 1. Try a straight decode of the blob — works when the backend writes `seed` at the top level.
+/// 2. If that fails because `seed` is absent (older rows / legacy minting), inject the
+///    coin's own `id` string as the seed and try again via JSONSerialization.
+/// 3. If `identity` or `personality` are missing entirely, give up and return nil so
+///    the caller can fall back to the asset-based renderer.
+func parseCrystalDNA(_ dna: JSONObject?, seed: String) -> CrystalDNA? {
+    guard let dna,
+          let encoded = try? JSONEncoder().encode(dna) else { return nil }
+
+    // 1. Happy path — backend populates top-level seed correctly.
+    if let decoded = try? JSONDecoder().decode(CrystalDNA.self, from: encoded) {
+        return decoded
+    }
+
+    // 2. seed missing at the top level — patch it in using JSONSerialization and retry.
+    guard var rawDict = (try? JSONSerialization.jsonObject(with: encoded)) as? [String: Any],
+          rawDict["identity"] != nil,
+          rawDict["personality"] != nil
+    else { return nil }
+
+    rawDict["seed"] = seed  // inject fallback seed
+
+    guard let patched = try? JSONSerialization.data(withJSONObject: rawDict),
+          let decoded = try? JSONDecoder().decode(CrystalDNA.self, from: patched)
+    else { return nil }
+
+    return decoded
 }
 
 #Preview("Collection") {

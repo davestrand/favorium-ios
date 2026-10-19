@@ -121,8 +121,13 @@ struct GemIntegrationExamples {
 
         var body: some View {
             VStack(spacing: 24) {
-                AnimatedFavorGemView(model: model, size: 320)
-                    .shadow(color: .black.opacity(0.3), radius: 20, y: 10)
+                AnimatedFavorGemView(
+                    gemFamily: model.assetGemFamily,
+                    tier: model.assetTier,
+                    gemColor: model.primarySwiftUIColor,
+                    size: 320
+                )
+                .shadow(color: .black.opacity(0.3), radius: 20, y: 10)
 
                 VStack(spacing: 8) {
                     Text(model.assetGemFamily.displayName)
@@ -144,7 +149,7 @@ struct GemIntegrationExamples {
 
     // MARK: Comparison View
 
-    /// Side-by-side comparison of asset vs procedural rendering
+    /// Side-by-side comparison of static vs animated asset rendering
     struct ComparisonExample: View {
         let model: CrystalModel
 
@@ -155,14 +160,25 @@ struct GemIntegrationExamples {
 
                 HStack(spacing: 30) {
                     VStack(spacing: 12) {
-                        FavorGemView(model: model, size: 200, showShimmer: true)
-                        Text("Asset-Based")
+                        FavorGemView(
+                            gemFamily: model.assetGemFamily,
+                            tier: model.assetTier,
+                            gemColor: model.primarySwiftUIColor,
+                            size: 200,
+                            showShimmer: false
+                        )
+                        Text("Static")
                             .font(.caption.bold())
                     }
 
                     VStack(spacing: 12) {
-                        MagicalCrystalView(model: model, size: 200)
-                        Text("Procedural")
+                        AnimatedFavorGemView(
+                            gemFamily: model.assetGemFamily,
+                            tier: model.assetTier,
+                            gemColor: model.primarySwiftUIColor,
+                            size: 200
+                        )
+                        Text("Animated")
                             .font(.caption.bold())
                     }
                 }

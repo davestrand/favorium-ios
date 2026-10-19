@@ -73,38 +73,31 @@ struct CrystalRng {
     }
 }
 
-// MARK: - Evolution Phases
+// MARK: - Evolution Phases  (4 tiers — Seed/Bloom/Legacy/Radiance)
 
 enum CrystalPhase: Int, CaseIterable {
-    case newborn = 0
-    case awakened = 1
-    case resonant = 2
-    case radiant = 3
-    case storied = 4
-    case legendary = 5
-    
+    case seed     = 0
+    case bloom    = 1
+    case legacy   = 2
+    case radiance = 3
+
     static func from(transferCount: Int) -> CrystalPhase {
-        switch transferCount {
-        case 0: return .newborn
-        case 1...4: return .awakened
-        case 5...9: return .resonant
-        case 10...24: return .radiant
-        case 25...49: return .storied
-        default: return .legendary
-        }
+        let c = max(0, transferCount)
+        if c >= 30 { return .radiance }
+        if c >= 15 { return .legacy }
+        if c >= 5  { return .bloom }
+        return .seed
     }
-    
+
     var whisper: String {
         switch self {
-        case .newborn: return "New to the world, still gathering its first light."
-        case .awakened: return "A first kindness has begun to glow within it."
-        case .resonant: return "Faint veins of light thread quietly through it."
-        case .radiant: return "Richer structure and a steadier inner light have formed."
-        case .storied: return "Many journeys now drift within, layered like warm weather."
-        case .legendary: return "It has traveled so far it seems lit from somewhere else."
+        case .seed:     return "New to the world, still gathering its first light."
+        case .bloom:    return "A first kindness has begun to glow within it."
+        case .legacy:   return "Many journeys now drift within, layered like warm weather."
+        case .radiance: return "It has traveled so far it seems lit from somewhere else."
         }
     }
-    
+
     var stage: Int { rawValue }
 }
 
@@ -291,6 +284,9 @@ struct CrystalModel {
     // Art families — nil means "use default fallback" in FavorGemView
     let gemFamily: String?        // e.g. "lightning"
     let frameFamily: String?      // e.g. "gothic"
+    /// Hue (0–360) for the decorative frame, stored in dna.identity.frame_hue.
+    /// Derived deterministically from seed when absent in older rows.
+    let frameHue: Double          // 0-360
 
     // Personality (immutable)
     let complexityBias: Double    // 0-1
@@ -322,10 +318,24 @@ struct CrystalEngine {
     static func derive(dna: CrystalDNA, transferCount: Int) -> CrystalModel {
         let phase = CrystalPhase.from(transferCount: transferCount)
         let stage = phase.stage
-        
-        // Resolve optional values
-        let colorRelationship = dna.identity.colorRelationshipEnum
-        let secondaryInfluence = dna.identity.secondaryInfluence ?? 0.5
+
+        // color_relationship and secondary_influence are optional in real rows.
+        // When absent, derive deterministically from seed (§4a of backend contract).
+        let colorRelationship: ColorRelationship
+        if let rel = dna.identity.colorRelationship {
+            colorRelationship = ColorRelationship(rawValue: rel) ?? .complementary
+        } else {
+            var rng = CrystalRng(seed: dna.seed, salt: "color-relationship")
+            colorRelationship = rng.pick(ColorRelationship.allCases)
+        }
+
+        let secondaryInfluence: Double
+        if let si = dna.identity.secondaryInfluence {
+            secondaryInfluence = si
+        } else {
+            var rng = CrystalRng(seed: dna.seed, salt: "color-influence")
+            secondaryInfluence = round4(rng.range(0.22, 0.88))
+        }
         
         // Build color profile
         let colorProfile = CrystalColorProfile.build(
@@ -347,37 +357,48 @@ struct CrystalEngine {
             stage: stage,
             orbitalAffinity: orbitalAff,
             complexityBias: dna.personality.complexityBias,
-            refraction: dna.personality.refraction,
+            refraction: dna.identity.refraction ?? dna.personality.refraction ?? 0.5,
             influence: colorProfile.influence,
             materialFamily: dna.identity.materialFamilyEnum,
-            secondaryColor: dna.identity.secondaryHue,
-            accentColor: dna.identity.secondaryHue // Could be derived differently
+            secondaryColor: dna.identity.secondaryColor,
+            accentColor: dna.identity.accentColor
         )
         
         // Calculate aura
+        let identityRefraction = dna.identity.refraction ?? dna.personality.refraction ?? 0.5
         let aura = clamp01(
             innerLight * 0.4 +
-            dna.personality.refraction * 0.25 +
+            identityRefraction * 0.25 +
             0.15 + // preset glow estimate
             Double(stage) * 0.06
         )
         
+        // Resolve frame hue — stored in identity, derived from seed when absent
+        let frameHue: Double
+        if let stored = dna.identity.frameHue {
+            frameHue = stored
+        } else {
+            var rng = CrystalRng(seed: dna.seed, salt: "frame-hue")
+            frameHue = round(rng.range(0, 360) * 10) / 10
+        }
+
         return CrystalModel(
             seed: dna.seed,
             phase: phase,
             transferCount: transferCount,
-            primaryHue: dna.identity.primaryHue,
-            secondaryHue: dna.identity.secondaryHue,
-            saturation: dna.identity.saturation,
+            primaryHue: dna.identity.primaryColor,
+            secondaryHue: dna.identity.secondaryColor,
+            saturation: dna.identity.saturation ?? 0.75,
             materialFamily: dna.identity.materialFamilyEnum,
             baseForm: dna.identity.baseForm,
             colorRelationship: colorRelationship,
             secondaryInfluence: secondaryInfluence,
-            gemFamily: dna.identity.gemFamily,
-            frameFamily: dna.identity.frameFamily,
+            gemFamily: nil,   // no gem_family field in real DNA — derived from base_form
+            frameFamily: nil,
+            frameHue: frameHue,
             complexityBias: dna.personality.complexityBias,
             orbitalAffinity: dna.personality.orbitalAffinity,
-            refraction: dna.personality.refraction,
+            refraction: identityRefraction,
             colorProfile: colorProfile,
             orbitals: orbitals,
             innerLightIntensity: innerLight,
@@ -458,15 +479,34 @@ struct CrystalEngine {
 // MARK: - Crystal DNA (from backend)
 
 struct CrystalIdentity: Codable {
-    let primaryHue: Double
-    let secondaryHue: Double
-    let saturation: Double
+    // Hues (0–360). "primary_color" / "secondary_color" / "accent_color" in the DB.
+    let primaryColor: Double
+    let secondaryColor: Double
+    let accentColor: Double
     let materialFamily: String
     let baseForm: String
+    // These three are OPTIONAL in real rows — derive from seed when absent (§4a of contract).
     let colorRelationship: String?
     let secondaryInfluence: Double?
-    let gemFamily: String?    // e.g. "lightning" — which gem art set to use
-    let frameFamily: String?  // e.g. "gothic"    — which frame art set to use
+    let saturation: Double?
+    // refraction lives here (NOT in personality)
+    let refraction: Double?
+    let luster: String?
+    let transparency: Double?
+    let innerLight: Double?
+    let inclusionType: String?
+    let inclusionDensity: Double?
+    let facetCount: Int?
+    let facetPattern: String?
+    let symmetry: Int?
+    let surfaceCharacter: String?
+    let palette: String?
+    /// Hue (0–360) for the decorative frame. Optional — derived from seed when absent.
+    let frameHue: Double?
+
+    // Convenience: hue value for the primary colour, 0–360
+    var primaryHue: Double { primaryColor }
+    var secondaryHue: Double { secondaryColor }
 
     var materialFamilyEnum: MaterialFamily {
         MaterialFamily(rawValue: materialFamily) ?? .coloredGemstone
@@ -478,26 +518,56 @@ struct CrystalIdentity: Codable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case primaryHue = "primary_hue"
-        case secondaryHue = "secondary_hue"
-        case saturation
-        case materialFamily = "material_family"
-        case baseForm = "base_form"
-        case colorRelationship = "color_relationship"
+        case primaryColor       = "primary_color"
+        case secondaryColor     = "secondary_color"
+        case accentColor        = "accent_color"
+        case materialFamily     = "material_family"
+        case baseForm           = "base_form"
+        case colorRelationship  = "color_relationship"
         case secondaryInfluence = "secondary_influence"
-        case gemFamily = "gem_family"
-        case frameFamily = "frame_family"
+        case saturation
+        case refraction
+        case luster
+        case transparency
+        case innerLight         = "inner_light"
+        case inclusionType      = "inclusion_type"
+        case inclusionDensity   = "inclusion_density"
+        case facetCount         = "facet_count"
+        case facetPattern       = "facet_pattern"
+        case symmetry
+        case surfaceCharacter   = "surface_character"
+        case palette
+        case frameHue           = "frame_hue"
     }
 }
 
 struct CrystalPersonality: Codable {
     let complexityBias: Double
     let orbitalAffinity: Double
-    let refraction: Double
-    
+    let evolutionFamily: String?
+    let secondaryFamily: String?
+    let metallicAffinity: Double?
+    let fractalAffinity: Double?
+    let spectralAffinity: Double?
+    let organicAffinity: Double?
+    let celestialAffinity: Double?
+    let particleAffinity: Double?
+
+    // NOTE: refraction is in identity, not here. Kept nil-safe here for
+    // any legacy rows that may have it under personality.
+    let refraction: Double?
+
     enum CodingKeys: String, CodingKey {
-        case complexityBias = "complexity_bias"
-        case orbitalAffinity = "orbital_affinity"
+        case complexityBias    = "complexity_bias"
+        case orbitalAffinity   = "orbital_affinity"
+        case evolutionFamily   = "evolution_family"
+        case secondaryFamily   = "secondary_family"
+        case metallicAffinity  = "metallic_affinity"
+        case fractalAffinity   = "fractal_affinity"
+        case spectralAffinity  = "spectral_affinity"
+        case organicAffinity   = "organic_affinity"
+        case celestialAffinity = "celestial_affinity"
+        case particleAffinity  = "particle_affinity"
         case refraction
     }
 }
