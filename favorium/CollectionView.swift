@@ -64,7 +64,7 @@ struct CollectionView: View {
                     await vm.load(userId: uid)
                 }
             }
-            .navigationDestination(item: $selectedCoin) { coin in
+            .sheet(item: $selectedCoin) { coin in
                 GemDetailView(coinId: coin.id, coinName: coin.name ?? "Gem", userId: appVM.userId)
             }
             .sheet(item: $sendGem) { gem in
@@ -322,9 +322,20 @@ private struct GemGridCell: View {
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(FavoriumTheme.ivory)
                             .lineLimit(1)
-                        Text("\(gemFamily.displayName) · \(tier.displayName)")
-                            .font(.system(size: 11))
-                            .foregroundColor(FavoriumTheme.ivoryDim)
+                        HStack(spacing: 4) {
+                            Text("\(gemFamily.displayName) · \(tier.displayName)")
+                                .font(.system(size: 11))
+                                .foregroundColor(FavoriumTheme.ivoryDim)
+                            if let trait = resolvedDNA?.trait {
+                                Text(trait.capitalized)
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundColor(FavoriumTheme.teal)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(FavoriumTheme.teal.opacity(0.12))
+                                    .clipShape(Capsule())
+                            }
+                        }
                     }
                     Spacer()
                     Image(systemName: "chevron.right")
@@ -377,9 +388,20 @@ private struct OriginalGemRow: View {
                     Text(coin.name ?? "Gem")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(FavoriumTheme.ivory)
-                    Text(holderSubtitle)
-                        .font(FavoriumTheme.captionFont)
-                        .foregroundColor(FavoriumTheme.ivoryDim)
+                    HStack(spacing: 6) {
+                        Text(holderSubtitle)
+                            .font(FavoriumTheme.captionFont)
+                            .foregroundColor(FavoriumTheme.ivoryDim)
+                        if let trait = resolvedDNA?.trait {
+                            Text(trait.capitalized)
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(FavoriumTheme.teal)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(FavoriumTheme.teal.opacity(0.12))
+                                .clipShape(Capsule())
+                        }
+                    }
                 }
 
                 Spacer()

@@ -46,25 +46,31 @@ struct GemDetailView: View {
 
     @State private var vm = GemDetailViewModel()
     @State private var showSend = false
+    @State private var gemAppeared = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        ZStack {
-            FavoriumTheme.background.ignoresSafeArea()
+        VStack(spacing: 0) {
+            navBar
+            Divider()
+                .background(FavoriumTheme.tealMuted.opacity(0.3))
 
-            switch vm.loadState {
-            case .idle, .loading:
-                loadingBody
-            case .failed(let msg):
-                errorBody(msg)
-            case .loaded:
-                if let j = vm.journey {
-                    loadedBody(j)
+            ZStack {
+                FavoriumTheme.background.ignoresSafeArea()
+
+                switch vm.loadState {
+                case .idle, .loading:
+                    loadingContent
+                case .failed(let msg):
+                    errorContent(msg)
+                case .loaded:
+                    if let j = vm.journey {
+                        loadedContent(j)
+                    }
                 }
             }
         }
-        .navigationBarHidden(true)
-        .toolbar(.hidden, for: .tabBar)
+        .background(FavoriumTheme.background.ignoresSafeArea())
         .task { await vm.load(coinId: coinId) }
         .sheet(isPresented: $showSend) {
             if let j = vm.journey {
@@ -80,38 +86,40 @@ struct GemDetailView: View {
         }
     }
 
-    // MARK: - Loaded body
+    // MARK: - Loaded content
 
-    private func loadedBody(_ j: SupabaseService.CoinJourneyPayload) -> some View {
+    private func loadedContent(_ j: SupabaseService.CoinJourneyPayload) -> some View {
         ScrollView {
             VStack(spacing: 0) {
 
-                // ── Navigation bar ────────────────────────────────────
-                navBar
-
-                // ── Hero gem ─────────────────────────────────────────
+                // ── Hero gem ──────────────────────────────────────────────
                 heroGem(j)
-                    .padding(.top, 8)
                     .padding(.bottom, 24)
 
-                // ── Gem name + attributes ─────────────────────────────
+                // ── Gem name + attributes ─────────────────────────────────
                 gemMeta(j)
                     .padding(.horizontal, 24)
                     .padding(.bottom, 20)
 
-                // ── Send button (only when user is current owner) ─────
+                // ── Send button (only when user is current owner) ─────────
                 if j.isOwner == true {
                     sendButton
                         .padding(.horizontal, 24)
                         .padding(.bottom, 28)
                 }
 
-                // ── Journey timeline ──────────────────────────────────
+                // ── Journey timeline ──────────────────────────────────────
                 journeySection(j)
                     .padding(.horizontal, 20)
-                    .padding(.bottom, 40)
+                    .padding(.bottom, 32)
             }
+            // Without this the VStack inside a ScrollView sizes itself to
+            // fit content rather than filling the available width, which
+            // causes text to be measured against a narrow intrinsic width
+            // and then clipped at the scroll view boundary.
+            .frame(maxWidth: .infinity)
         }
+        .scrollIndicators(.hidden)
     }
 
     // MARK: - Nav bar
@@ -119,7 +127,7 @@ struct GemDetailView: View {
     private var navBar: some View {
         HStack {
             Button { dismiss() } label: {
-                Image(systemName: "chevron.left")
+                Image(systemName: "chevron.down")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundColor(FavoriumTheme.ivory)
                     .frame(width: 40, height: 40)
@@ -146,43 +154,64 @@ struct GemDetailView: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.top, 56)
+        .padding(.vertical, 12)
+        .background(FavoriumTheme.background)
     }
 
     // MARK: - Hero
 
     private func heroGem(_ j: SupabaseService.CoinJourneyPayload) -> some View {
-        let hue = j.dna?.resolvedHue ?? 45
-        let sat = j.dna?.resolvedSaturation ?? 0.7
+        let hue       = j.dna?.resolvedHue ?? 45
+        let sat       = j.dna?.resolvedSaturation ?? 0.7
         let glowColor = Color(hue: hue / 360.0, saturation: sat, brightness: 0.9)
-        let family = GemFamily.from(j.dna?.resolvedFamily)
-        let tier = Tier.from(transferCount: j.transferCount)
+        let family    = GemFamily.from(j.dna?.resolvedFamily)
+        let tier      = Tier.from(transferCount: j.transferCount)
+        let gemSize: CGFloat = 280
 
-        return GeometryReader { geo in
-            let gemSize = min(220, geo.size.width * 0.56)
-            let glowSize = gemSize * 1.55
-
+        // Gem — same call as the generator: FavorGemView with glow + shimmer
+        return FavorGemView(
+            gemFamily: family,
+            tier: tier,
+            gemColor: glowColor,
+            size: gemSize,
+            showGlow: true,
+            showShimmer: true
+        )
+        .scaleEffect(gemAppeared ? 1.0 : 0.82)
+        .opacity(gemAppeared ? 1.0 : 0.0)
+        .animation(
+            .spring(response: 0.45, dampingFraction: 0.62),
+            value: gemAppeared
+        )
+        .frame(maxWidth: .infinity)
+        .frame(height: 360)
+        // Decorative gradients live in the background so their oversized
+        // frames never widen the layout — on small phones the 448pt glow
+        // used to push the whole scroll content (and the Journey) off-screen.
+        .background {
             ZStack {
+                LinearGradient(
+                    colors: [
+                        Color.black,
+                        Color(hue: hue / 360.0, saturation: 0.3, brightness: 0.2)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+
                 RadialGradient(
-                    colors: [glowColor.opacity(0.20), FavoriumTheme.background],
+                    colors: [glowColor.opacity(0.25), Color.clear],
                     center: .center,
                     startRadius: gemSize * 0.18,
-                    endRadius: glowSize * 0.5
+                    endRadius: gemSize * 0.9
                 )
-                .frame(width: glowSize, height: glowSize)
+                .frame(width: gemSize * 1.6, height: gemSize * 1.6)
                 .blur(radius: 30)
-
-                AnimatedFavorGemView(
-                    gemFamily: family,
-                    tier: tier,
-                    gemColor: glowColor,
-                    size: gemSize
-                )
             }
-            .frame(maxWidth: .infinity)
-            .frame(width: geo.size.width, height: gemSize * 1.2)
         }
-        .frame(height: min(264, UIScreen.main.bounds.width * 0.67))
+        .clipped()
+        .onAppear { gemAppeared = true }
+        .onDisappear { gemAppeared = false }
     }
 
     // MARK: - Gem meta
@@ -286,46 +315,52 @@ struct GemDetailView: View {
             }
             .padding(.bottom, 16)
 
-            // Timeline entries
-            let history = j.history  // ascending by created_at from RPC
-            let visibleCutoff = 2
+            // The RPC returns history ascending by created_at (oldest first, per
+            // the backend contract). Re-sort newest-first so the minted event
+            // lands in the tail slot. ISO-8601 timestamps sort lexically.
+            let history = j.history.sorted { $0.createdAt > $1.createdAt }
 
-            if history.isEmpty {
-                Text("No exchanges yet.")
-                    .font(FavoriumTheme.captionFont)
-                    .foregroundColor(FavoriumTheme.ivoryDim)
-                    .padding(.vertical, 20)
-            } else {
+            if let tail = history.last {
+                // Split the history into three logical buckets:
+                //  head   — first 2 entries (newest), always visible
+                //  middle — everything between head and the last entry
+                //  tail   — the final entry (creation event), always visible
+                //
+                // With 1 entry:  head=[], middle=[], tail=[item0]
+                // With 2 entries: head=[item0], middle=[], tail=[item1]
+                // With 3 entries: head=[item0,item1], middle=[], tail=[item2]
+                // With 4+ entries: head=[item0,item1], middle=[item2…n-1], tail=[itemN]
+
+                let headCount  = min(2, max(0, history.count - 1))
+                let head       = Array(history.prefix(headCount))
+                let middle     = headCount < history.count - 1
+                               ? Array(history[headCount ..< history.count - 1])
+                               : []
+
                 VStack(alignment: .leading, spacing: 0) {
-                    // Newest two always shown
-                    ForEach(history.prefix(visibleCutoff)) { item in
+                    ForEach(head) { item in
                         timelineRow(item, isLast: false)
                     }
 
-                    // Collapse / expand older entries
-                    if history.count > visibleCutoff + 1 {
-                        let olderCount = history.count - visibleCutoff - 1  // -1 for creation entry
-                        collapseRow(count: olderCount)
+                    if !middle.isEmpty {
+                        collapseRow(count: middle.count)
                             .animation(.easeInOut(duration: 0.3), value: vm.earlierExpanded)
 
                         if vm.earlierExpanded {
-                            ForEach(history.dropFirst(visibleCutoff).dropLast()) { item in
+                            ForEach(middle) { item in
                                 timelineRow(item, isLast: false)
                             }
                             .transition(.move(edge: .top).combined(with: .opacity))
                         }
-                    } else {
-                        // Show middle entries when total is small
-                        ForEach(history.dropFirst(visibleCutoff).dropLast()) { item in
-                            timelineRow(item, isLast: false)
-                        }
                     }
 
-                    // Creation entry always at bottom
-                    if let last = history.last {
-                        timelineRow(last, isLast: true)
-                    }
+                    timelineRow(tail, isLast: true)
                 }
+            } else {
+                Text("No exchanges yet.")
+                    .font(FavoriumTheme.captionFont)
+                    .foregroundColor(FavoriumTheme.ivoryDim)
+                    .padding(.vertical, 20)
             }
         }
     }
@@ -352,13 +387,16 @@ struct GemDetailView: View {
             // Content
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline) {
+                    // Long names wrap rather than pushing the date off-screen
                     Text(transferLabel(item))
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(FavoriumTheme.ivory)
-                    Spacer()
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 8)
                     Text(formattedDate(item.createdAt))
                         .font(.system(size: 12))
                         .foregroundColor(FavoriumTheme.ivoryDim)
+                        .fixedSize()
                 }
                 if let desc = item.description, !desc.isEmpty {
                     Text(desc)
@@ -395,17 +433,19 @@ struct GemDetailView: View {
             }
         } label: {
             HStack(alignment: .top, spacing: 12) {
-                // Spine
+                // Spine — matches timelineRow's 10pt column width exactly.
+                // The ellipsis badge is centred on the spine line rather than
+                // overflowing it, so nothing bleeds outside the column.
                 VStack(spacing: 0) {
                     ZStack {
                         Circle()
                             .fill(FavoriumTheme.surface)
-                            .frame(width: 24, height: 24)
+                            .frame(width: 20, height: 20)
                         Image(systemName: "ellipsis")
-                            .font(.system(size: 9, weight: .bold))
+                            .font(.system(size: 8, weight: .bold))
                             .foregroundColor(FavoriumTheme.tealMuted)
                     }
-                    .offset(x: -7)
+                    .padding(.top, 4)
                     Rectangle()
                         .fill(FavoriumTheme.tealMuted.opacity(0.35))
                         .frame(width: 2)
@@ -430,20 +470,19 @@ struct GemDetailView: View {
 
     // MARK: - Loading / Error states
 
-    private var loadingBody: some View {
-        VStack(spacing: 24) {
-            navBar
+    private var loadingContent: some View {
+        VStack {
             Spacer()
             ProgressView()
                 .tint(FavoriumTheme.teal)
                 .scaleEffect(1.4)
             Spacer()
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func errorBody(_ message: String) -> some View {
+    private func errorContent(_ message: String) -> some View {
         VStack(spacing: 16) {
-            navBar
             Spacer()
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 40))
@@ -459,6 +498,7 @@ struct GemDetailView: View {
             .foregroundColor(FavoriumTheme.teal)
             Spacer()
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Date formatting

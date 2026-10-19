@@ -73,11 +73,16 @@ enum GemFamily: String, CaseIterable, Identifiable {
         "gem_\(rawValue)_\(tier.rawValue)"
     }
 
-    /// Map from a `CrystalDNA` gemFamily string to a `GemFamily`.
-    /// Falls back to `.lightning` until additional families are added.
+    /// Map a DNA `gemFamily` / `identity.base_form` string to a `GemFamily`.
+    /// Falls back to `.lightning` for nil or unrecognised values.
     static func from(_ string: String?) -> GemFamily {
-        guard let string else { return .lightning }
-        return GemFamily(rawValue: string.lowercased()) ?? .lightning
+        normalized(string) ?? .lightning
+    }
+
+    /// Case- and whitespace-insensitive match, or nil if the string isn't a known family.
+    static func normalized(_ string: String?) -> GemFamily? {
+        guard let string else { return nil }
+        return GemFamily(rawValue: string.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
     }
 }
 
@@ -136,6 +141,9 @@ struct FavorGemView: View {
     let size: CGFloat
     let showGlow: Bool
     let showShimmer: Bool
+    /// When true, suppresses the built-in pendulum tilt so a parent view
+    /// (e.g. AnimatedFavorGemView) can own all rotation without compounding.
+    let suppressTilt: Bool
 
     /// Primary initializer. Frame family is always derived from gem family automatically.
     init(
@@ -145,16 +153,18 @@ struct FavorGemView: View {
         frameColor: Color? = nil,
         size: CGFloat = 200,
         showGlow: Bool = false,
-        showShimmer: Bool = false
+        showShimmer: Bool = false,
+        suppressTilt: Bool = false
     ) {
-        self.gemFamily   = gemFamily
-        self.frameFamily = FrameFamily.matching(gemFamily)
-        self.tier        = tier
-        self.gemColor    = gemColor
-        self.frameColor  = frameColor
-        self.size        = size
-        self.showGlow    = showGlow
-        self.showShimmer = showShimmer
+        self.gemFamily    = gemFamily
+        self.frameFamily  = FrameFamily.matching(gemFamily)
+        self.tier         = tier
+        self.gemColor     = gemColor
+        self.frameColor   = frameColor
+        self.size         = size
+        self.showGlow     = showGlow
+        self.showShimmer  = showShimmer
+        self.suppressTilt = suppressTilt
     }
     
     var body: some View {
@@ -176,9 +186,9 @@ struct FavorGemView: View {
             }
         }
         .frame(width: size, height: size)
-        // Pendulum tilt applied to the whole gem — Y axis spin, slight X nod for realism
+        // Pendulum tilt — skipped when a parent view owns rotation (suppressTilt: true)
         .rotation3DEffect(
-            .degrees(tilt),
+            .degrees(suppressTilt ? 0 : tilt),
             axis: (x: 0.15, y: 1.0, z: 0.0),
             anchor: .center,
             perspective: 0.5
@@ -187,10 +197,11 @@ struct FavorGemView: View {
         .shadow(
             color: .black.opacity(0.35),
             radius: 14,
-            x: sin(tilt * .pi / 180) * 10,
+            x: suppressTilt ? 0 : sin(tilt * .pi / 180) * 10,
             y: 6
         )
         .onAppear {
+            guard !suppressTilt else { return }
             // Pendulum tilt — rocks symmetrically from -20° to +20° and back
             withAnimation(.easeInOut(duration: 4.5).repeatForever(autoreverses: true)) {
                 tilt = 20
@@ -527,8 +538,7 @@ struct AnimatedFavorGemView: View {
     let size: CGFloat
 
     @State private var pulse: Double = 1.0
-    @State private var rotation: Double = 0
-    @State private var shimmerPhase: Double = 0
+    @State private var tilt: Double = -8
 
     init(
         gemFamily: GemFamily,
@@ -544,9 +554,10 @@ struct AnimatedFavorGemView: View {
         self.frameColor  = frameColor
         self.size        = size
     }
+
     var body: some View {
         ZStack {
-            // Pulsing glow
+            // Pulsing glow — scales slightly in sync with the tilt
             Circle()
                 .fill(
                     RadialGradient(
@@ -563,7 +574,7 @@ struct AnimatedFavorGemView: View {
                 .frame(width: size * pulse, height: size * pulse)
                 .blur(radius: size * 0.15)
 
-            // Gem and frame
+            // Gem and frame — shimmer on, pendulum owned here via rotation3DEffect below
             FavorGemView(
                 gemFamily: gemFamily,
                 tier: tier,
@@ -571,19 +582,32 @@ struct AnimatedFavorGemView: View {
                 frameColor: frameColor,
                 size: size,
                 showGlow: false,
-                showShimmer: true
+                showShimmer: true,
+                suppressTilt: true
             )
-            .rotationEffect(.degrees(rotation))
         }
         .frame(width: size, height: size)
+        // Pendulum tilt on the whole ZStack (glow + gem move together)
+        .rotation3DEffect(
+            .degrees(tilt),
+            axis: (x: 0.15, y: 1.0, z: 0.0),
+            anchor: .center,
+            perspective: 0.5
+        )
+        .shadow(
+            color: .black.opacity(0.35),
+            radius: 14,
+            x: sin(tilt * .pi / 180) * 10,
+            y: 6
+        )
         .onAppear {
             // Gentle pulse
             withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)) {
                 pulse = 1.1
             }
-            // Very slow rotation
-            withAnimation(.linear(duration: 60).repeatForever(autoreverses: false)) {
-                rotation = 360
+            // Slow pendulum — rocks from -8° to +8° and back, slightly slower than thumbnails
+            withAnimation(.easeInOut(duration: 6.0).repeatForever(autoreverses: true)) {
+                tilt = 8
             }
         }
     }

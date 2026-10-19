@@ -170,7 +170,14 @@ final class SupabaseService {
         let personality: Personality?
 
         // Resolved values — Layer 1 wins, fall back to Layer 2
-        var resolvedFamily: String  { gemFamily.isEmpty ? (identity?.baseForm ?? "lightning") : gemFamily }
+        /// Layer 1 `gemFamily` wins, then Layer 2 `identity.base_form`, then "lightning".
+        /// A layer only counts if it names a known asset family, so an unexpected
+        /// Layer 1 value still falls through to a valid `base_form`.
+        var resolvedFamily: String {
+            [gemFamily, identity?.baseForm]
+                .compactMap { GemFamily.normalized($0) }
+                .first?.rawValue ?? GemFamily.lightning.rawValue
+        }
         var resolvedHue: Double     { primaryHue > 0 || !gemFamily.isEmpty ? primaryHue : (identity?.primaryColor ?? 45) }
         var resolvedSaturation: Double { saturation > 0 ? saturation : (identity?.saturation ?? 0.7) }
 

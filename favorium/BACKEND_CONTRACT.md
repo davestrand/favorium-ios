@@ -38,11 +38,14 @@ All of these have been corrected in the iOS codebase as of this update.
 
 ## Remaining iOS ↔ backend items to coordinate
 
-### `GemFamily` asset mapping
-The iOS app uses `GemFamily` (lightning/celestial/victorian/gothic) as *asset file* names. Real DNA has `identity.base_form` with values like `heart`, `lightning`, `star`, etc. The current mapping falls back to `.lightning` assets for any unrecognised `base_form`. A proper mapping from `base_form` → asset family needs to be agreed on.
+### `GemFamily` asset mapping — RESOLVED
+Superseded by `BACKEND_CONTRACT 2.md` (verified against live data). `identity.base_form`
+values are exactly `lightning | celestial | victorian | gothic` — the iOS asset family
+names. `GemDNA.resolvedFamily` reads Layer 1 `gemFamily`, then `base_form`, then
+`"lightning"`, skipping any layer that isn't a known family.
 
-### `CoinJourneyPayload` snake_case → camelCase
-The RPC returns snake_case JSON. The Swift struct currently uses snake_case property names and relies on default `JSONDecoder` key matching. Adding explicit `CodingKeys` would be safer — flagged for a follow-up pass.
+### `CoinJourneyPayload` CodingKeys — DONE
+Explicit `CodingKeys` are in place.
 
 ### `coins.traits` (legacy field)
 The backend contract says `traits` is `NOT NULL`. iOS does not read it currently (it's decoded as `JSONObject?` but ignored). No action needed unless we implement a `dnaFromTraits` fallback path.
