@@ -52,10 +52,6 @@ struct ContentView: View {
             selectedTab = route == .collection ? .collection : .favors
             push.pendingRoute = nil
         }
-        // App icon badge mirrors the Favors tab badge
-        .onChange(of: notifications.actionCount) { _, count in
-            push.updateBadge(count)
-        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 Task { await notifications.appBecameActive() }

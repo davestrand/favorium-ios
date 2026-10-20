@@ -117,23 +117,34 @@ final class PushManager: NSObject {
 // MARK: - Notification delegate
 
 extension PushManager: UNUserNotificationCenterDelegate {
+    // These use the completion-handler forms on purpose. The `async` forms are bridged
+    // by Swift on a background cooperative thread, and UIKit then finishes handling the
+    // notification (snapshot / state restoration) on that thread, which aborts with
+    // "Call must be made on main thread". Calling the completion handler on the main
+    // queue keeps UIKit on the main thread.
+
     /// While the app is open, the in-app banner (Realtime) is the only UI for the event —
     /// no second system banner (per the backend's PUSH_CONTRACT).
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
-        willPresent notification: UNNotification
-    ) async -> UNNotificationPresentationOptions {
-        []
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping @Sendable (UNNotificationPresentationOptions) -> Void
+    ) {
+        DispatchQueue.main.async { completionHandler([]) }
     }
 
     /// Tapping a push opens the matching tab.
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
-        didReceive response: UNNotificationResponse
-    ) async {
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping @Sendable () -> Void
+    ) {
+        // Read what we need here; the response object isn't Sendable
         let routeName = response.notification.request.content.userInfo["route"] as? String
-        let route = routeName.flatMap(Route.init(rawValue:)) ?? .favors
-        await MainActor.run { PushManager.shared.pendingRoute = route }
+        DispatchQueue.main.async {
+            PushManager.shared.pendingRoute = routeName.flatMap(Route.init(rawValue:)) ?? .favors
+            completionHandler()
+        }
     }
 }
 

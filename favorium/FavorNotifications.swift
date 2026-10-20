@@ -227,14 +227,19 @@ final class FavorNotificationCenter {
         return resolved
     }
 
-    /// Counts favors waiting on this user (the Favors tab badge).
+    /// Recounts favors waiting on this user (Favors tab badge) and writes it to the app
+    /// icon. Call after anything that can change the count — including the user's own
+    /// accept / decline / give actions, which don't always arrive as live updates.
     @MainActor
-    private func refreshActionCount() async {
+    func refreshActionCount() async {
         guard let userId else { return }
         guard let incoming = try? await SupabaseService.shared.myIncomingFavors(userId: userId) else { return }
         // Contract §8 (same rule as the push badge and the web Favors badge):
         // offers to answer + gems you owe
         actionCount = incoming.filter { $0.isProposed || ($0.isCompleted && $0.coin_id == nil) }.count
+        // Always write it, even if unchanged: pushes set the icon badge from the server
+        // and can leave it higher than the real count.
+        PushManager.shared.updateBadge(actionCount)
     }
 }
 

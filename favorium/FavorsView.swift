@@ -242,6 +242,7 @@ struct FavorsView: View {
                 .refreshable {
                     if let uid = appVM.userId {
                         await vm.load(userId: uid)
+                        await notifications.refreshActionCount()
                     }
                 }
                 .animation(.easeInOut(duration: 0.35), value: vm.hasPending)
@@ -284,7 +285,11 @@ struct FavorsView: View {
 
     private func reload() {
         if let uid = appVM.userId {
-            Task { await vm.load(userId: uid) }
+            Task {
+                await vm.load(userId: uid)
+                // Keep the tab + app icon badge in step with what's on screen
+                await notifications.refreshActionCount()
+            }
         }
     }
 
@@ -393,7 +398,11 @@ struct FavorsView: View {
     /// Runs a favor action with the signed-in user's id.
     private func act(_ action: @escaping (UUID) async -> Void) {
         guard let uid = appVM.userId else { return }
-        Task { await action(uid) }
+        Task {
+            await action(uid)
+            // Accept / decline / complete / cancel can change the badge count
+            await notifications.refreshActionCount()
+        }
     }
 
     private var pendingLoadingPlaceholders: some View {

@@ -221,11 +221,12 @@ struct CollectionView: View {
         }
         .sheet(isPresented: $showSendPicker) {
             SendGemView(userId: appVM.userId) {
-                // Refresh after a gem is given
+                // Refresh after a gem is given (one fewer gem owed → badge drops)
                 Task {
                     if let uid = appVM.userId {
                         await vm.load(userId: uid)
                     }
+                    await notifications.refreshActionCount()
                 }
             }
         }
