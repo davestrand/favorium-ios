@@ -56,6 +56,7 @@ struct GemDetailView: View {
 
     @State private var vm = GemDetailViewModel()
     @State private var showSend = false
+    @State private var showRename = false
     @State private var gemAppeared = false
     @Environment(\.dismiss) private var dismiss
 
@@ -82,11 +83,20 @@ struct GemDetailView: View {
         }
         .background(FavoriumTheme.background.ignoresSafeArea())
         .task { await vm.load(coinId: coinId, userId: userId) }
+        .sheet(isPresented: $showRename) {
+            if let j = vm.journey {
+                RenameGemView(coinId: coinId, currentName: j.name,
+                              dna: j.dna, transferCount: j.transferCount) { _ in
+                    Task { await vm.load(coinId: coinId, userId: userId) }
+                }
+            }
+        }
         .sheet(isPresented: $showSend) {
             if let j = vm.journey {
                 SendGemView(
                     initialGem: GiftableGem(id: coinId, name: j.name,
-                                            transferCount: j.transferCount, dna: j.dna),
+                                            transferCount: j.transferCount, dna: j.dna,
+                                            creatorId: j.isCreator == true ? userId : nil),
                     userId: userId
                 ) {
                     Task { await vm.load(coinId: coinId, userId: userId) }
@@ -226,11 +236,51 @@ struct GemDetailView: View {
         let tier = Tier.from(transferCount: j.transferCount)
         let family = GemFamily.from(j.dna?.resolvedFamily)
 
+        let isCreator = j.isCreator == true
+        let hasStarterName = GemNaming.isStarterName(j.name)
+
         return VStack(spacing: 10) {
-            Text(j.name)
-                .font(.system(size: 28, weight: .bold, design: .serif))
-                .foregroundColor(FavoriumTheme.ivory)
-                .multilineTextAlignment(.center)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(j.name)
+                    .font(.system(size: 28, weight: .bold, design: .serif))
+                    .foregroundColor(FavoriumTheme.ivory)
+                    .multilineTextAlignment(.center)
+                // Only the creator may rename (enforced by rename_coin)
+                if isCreator {
+                    Button { showRename = true } label: {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(FavoriumTheme.accent)
+                    }
+                    .accessibilityLabel("Rename gem")
+                }
+            }
+
+            // Nudge creators whose gem still has its auto-generated starter name
+            if isCreator && hasStarterName {
+                Button { showRename = true } label: {
+                    VStack(spacing: 4) {
+                        Label("Name your gem", systemImage: "sparkles")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(FavoriumTheme.accent)
+                        Text("It still has its starter name. Give it one that means something to you.")
+                            .font(FavoriumTheme.captionFont)
+                            .foregroundColor(FavoriumTheme.ivoryDim)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: .infinity)
+                    .background(FavoriumTheme.accent.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: FavoriumTheme.rowRadius))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: FavoriumTheme.rowRadius)
+                            .stroke(FavoriumTheme.accent.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                    )
+                }
+                .buttonStyle(.plain)
+            }
 
             if j.isCreator == true {
                 Text("One of your original gems")

@@ -63,7 +63,10 @@ struct CollectionView: View {
                     await vm.load(userId: uid)
                 }
             }
-            .sheet(item: $selectedCoin) { coin in
+            .sheet(item: $selectedCoin, onDismiss: {
+                // Pick up anything changed on the detail page (e.g. a new name)
+                if let uid = appVM.userId { Task { await vm.load(userId: uid) } }
+            }) { coin in
                 GemDetailView(coinId: coin.id, coinName: coin.name ?? "Gem", userId: appVM.userId)
             }
         }
@@ -323,10 +326,16 @@ private struct GemGridCell: View {
                 Divider().background(FavoriumTheme.accentMuted.opacity(0.3))
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(coin.name ?? "Gem")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(FavoriumTheme.ivory)
-                        .lineLimit(1)
+                    HStack(spacing: 6) {
+                        Text(coin.name ?? "Gem")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(FavoriumTheme.ivory)
+                            .lineLimit(1)
+                        // Creator's gem still wearing its starter name
+                        if isOriginal && GemNaming.isStarterName(coin.name) {
+                            NameItTag()
+                        }
+                    }
                     storyText
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -387,6 +396,22 @@ private struct GemGridCell: View {
 
 // MARK: - Original Gem Row
 
+/// Small nudge shown on a creator's gem that still has its starter name.
+private struct NameItTag: View {
+    var body: some View {
+        Label("Name it", systemImage: "pencil")
+            .labelStyle(.titleAndIcon)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundColor(FavoriumTheme.accent)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(FavoriumTheme.accent.opacity(0.12))
+            .clipShape(Capsule())
+            .fixedSize()
+            .accessibilityLabel("Needs a name")
+    }
+}
+
 private struct OriginalGemRow: View {
     let coin: SupabaseService.CoinSummary
     let isAway: Bool
@@ -406,9 +431,15 @@ private struct OriginalGemRow: View {
                 )
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(coin.name ?? "Gem")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(FavoriumTheme.ivory)
+                    HStack(spacing: 6) {
+                        Text(coin.name ?? "Gem")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(FavoriumTheme.ivory)
+                        // Every row here is the user's own original
+                        if GemNaming.isStarterName(coin.name) {
+                            NameItTag()
+                        }
+                    }
                     HStack(spacing: 6) {
                         Text(holderSubtitle)
                             .font(FavoriumTheme.captionFont)

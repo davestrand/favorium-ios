@@ -20,20 +20,28 @@ struct GiftableGem: Identifiable, Hashable {
     let name: String
     let transferCount: Int
     let dna: SupabaseService.GemDNA?
+    /// Who created the gem — only they may rename it
+    let creatorId: UUID?
 
     static func == (lhs: GiftableGem, rhs: GiftableGem) -> Bool { lhs.id == rhs.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
 
-    init(id: UUID, name: String, transferCount: Int, dna: SupabaseService.GemDNA?) {
+    init(id: UUID, name: String, transferCount: Int, dna: SupabaseService.GemDNA?, creatorId: UUID? = nil) {
         self.id = id
         self.name = name
         self.transferCount = transferCount
         self.dna = dna
+        self.creatorId = creatorId
+    }
+
+    /// Same gem with a new name (after rename_coin)
+    func renamed(_ newName: String) -> GiftableGem {
+        GiftableGem(id: id, name: newName, transferCount: transferCount, dna: dna, creatorId: creatorId)
     }
 
     init(_ coin: SupabaseService.CoinSummary) {
         self.init(id: coin.id, name: coin.name ?? "Gem",
-                  transferCount: coin.transfer_count ?? 0, dna: coin.gemDNA)
+                  transferCount: coin.transfer_count ?? 0, dna: coin.gemDNA, creatorId: coin.creator_id)
     }
 }
 
@@ -100,6 +108,7 @@ struct SendGemView: View {
     let onComplete: () -> Void
 
     @State private var vm = SendGemViewModel()
+    @State private var showRename = false
     @Environment(\.dismiss) private var dismiss
 
     init(
@@ -137,6 +146,14 @@ struct SendGemView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .sheet(isPresented: $showRename) {
+            if let gem = vm.gem {
+                RenameGemView(coinId: gem.id, currentName: gem.name,
+                              dna: gem.dna, transferCount: gem.transferCount) { newName in
+                    vm.gem = gem.renamed(newName)
+                }
+            }
+        }
         .task {
             vm.gem = initialGem
             vm.favor = initialFavor
@@ -365,6 +382,33 @@ struct SendGemView: View {
                         .padding(16)
                         .background(FavoriumTheme.surface)
                         .clipShape(RoundedRectangle(cornerRadius: FavoriumTheme.cardRadius))
+
+                        // Last chance for the creator to name a gem before it leaves
+                        if GemNaming.shouldSuggestNaming(name: gem.name, creatorId: gem.creatorId, userId: userId) {
+                            Button { showRename = true } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "pencil.line")
+                                        .foregroundColor(FavoriumTheme.accent)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Name it first?")
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundColor(FavoriumTheme.ivory)
+                                        Text("You created this gem and it still has its starter name.")
+                                            .font(FavoriumTheme.captionFont)
+                                            .foregroundColor(FavoriumTheme.ivoryDim)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                    Spacer(minLength: 0)
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(FavoriumTheme.ivoryDim)
+                                }
+                                .padding(14)
+                                .background(FavoriumTheme.accent.opacity(0.08))
+                                .clipShape(RoundedRectangle(cornerRadius: FavoriumTheme.rowRadius))
+                            }
+                            .buttonStyle(.plain)
+                        }
 
                         Text("Once given, this gem belongs to \(favor.helper_name ?? "them") and continues its journey from there.")
                             .font(FavoriumTheme.captionFont)

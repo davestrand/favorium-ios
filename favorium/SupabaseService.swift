@@ -457,6 +457,20 @@ final class SupabaseService {
     }
     
     /// Get users you've interacted with (exchanged favors with)
+    /// Renames a gem (rename_coin). Only the gem's original creator may rename it;
+    /// the server trims/collapses whitespace, enforces 1–40 characters, and returns
+    /// the name exactly as stored.
+    func renameCoin(coinId: UUID, name: String) async throws -> String {
+        struct RenameParams: Encodable {
+            let p_coin_id: String
+            let p_name: String
+        }
+        let response = try await client
+            .rpc("rename_coin", params: RenameParams(p_coin_id: coinId.uuidString, p_name: name))
+            .execute()
+        return try JSONDecoder().decode(String.self, from: response.data)
+    }
+
     /// Everyone the user is connected with — the people propose_favor allows them to help.
     /// `connections` stores each pair once, ordered (user_a < user_b), so the user can be on either side.
     func myConnections(userId: UUID) async throws -> [UserProfile] {
