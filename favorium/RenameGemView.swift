@@ -129,7 +129,6 @@ struct RenameGemView: View {
                 .padding(.bottom, 40)
             }
         }
-        .preferredColorScheme(.dark)
         .onAppear { isFieldFocused = true }
     }
 

@@ -96,7 +96,6 @@ struct ContentView: View {
                 }
         }
         .tint(FavoriumTheme.accent)
-        .preferredColorScheme(.dark)
         .environment(notifications)
         // Slide-in banner for live favor changes
         .overlay(alignment: .top) {
@@ -157,23 +156,49 @@ struct ContentView: View {
 // MARK: - Theme
 
 /// Centralized design tokens for the Favorium "Sovereign" aesthetic — art-deco
-/// sci-fi: midnight-navy halls lit by sapphire light rays, polished gold metal,
-/// and platinum-silver secondary text.
+/// sci-fi. Every color adapts to the system appearance:
+/// - Dark: midnight-navy halls lit by sapphire rays, polished gold, platinum text.
+/// - Light ("Sovereign by day"): ivory marble under a pale sapphire sky, antique
+///   gold deep enough to read as text, and navy ink.
 enum FavoriumTheme {
     // Colors
-    static let background   = Color(red: 0.020, green: 0.039, blue: 0.110)  // #050A1C midnight navy
-    static let backgroundTop = Color(red: 0.035, green: 0.078, blue: 0.200) // #091433 deep sapphire (top of backdrop)
-    static let surface      = Color(red: 0.051, green: 0.102, blue: 0.227)  // #0D1A3A navy panel
-    static let surfaceHigh  = Color(red: 0.086, green: 0.149, blue: 0.310)  // #16264F raised panel
-    static let accent       = Color(red: 0.910, green: 0.722, blue: 0.290)  // #E8B84A polished gold
-    static let accentMuted  = Color(red: 0.663, green: 0.510, blue: 0.184)  // #A9822F antique gold (spines, borders)
-    static let silver       = Color(red: 0.788, green: 0.827, blue: 0.902)  // #C9D3E6 platinum silver
-    static let sapphire     = Color(red: 0.239, green: 0.482, blue: 1.000)  // #3D7BFF electric sapphire
-    static let sapphireGlow = Color(red: 0.776, green: 0.867, blue: 1.000)  // #C6DDFF pale ray light
-    static let ivory        = Color(red: 0.957, green: 0.937, blue: 0.890)  // #F4EFE3 warm ivory
-    static let ivoryDim     = silver                                         // secondary text
-    static let gold         = Color(red: 0.85, green: 0.65, blue: 0.20)
-    static let amber        = Color(red: 0.90, green: 0.60, blue: 0.10)
+    static let background = Color(
+        light: Color(red: 0.957, green: 0.933, blue: 0.882),   // #F4EEE1 ivory marble
+        dark: Color(red: 0.020, green: 0.039, blue: 0.110))     // #050A1C midnight navy
+    static let backgroundTop = Color(
+        light: Color(red: 0.851, green: 0.894, blue: 0.961),   // #D9E4F5 pale sapphire sky
+        dark: Color(red: 0.035, green: 0.078, blue: 0.200))     // #091433 deep sapphire (top of backdrop)
+    static let surface = Color(
+        light: Color(red: 1.000, green: 0.988, blue: 0.961),   // #FFFCF5 cream panel
+        dark: Color(red: 0.051, green: 0.102, blue: 0.227))     // #0D1A3A navy panel
+    static let surfaceHigh = Color(
+        light: Color(red: 0.929, green: 0.898, blue: 0.827),   // #EDE5D3 raised champagne
+        dark: Color(red: 0.086, green: 0.149, blue: 0.310))     // #16264F raised panel
+    static let accent = Color(
+        light: Color(red: 0.541, green: 0.384, blue: 0.071),   // #8A6212 antique gold (4.5:1 on ivory)
+        dark: Color(red: 0.910, green: 0.722, blue: 0.290))     // #E8B84A polished gold
+    static let accentMuted = Color(
+        light: Color(red: 0.690, green: 0.541, blue: 0.243),   // #B08A3E brass (spines, borders)
+        dark: Color(red: 0.663, green: 0.510, blue: 0.184))     // #A9822F antique gold (spines, borders)
+    static let silver = Color(
+        light: Color(red: 0.290, green: 0.345, blue: 0.471),   // #4A5878 slate
+        dark: Color(red: 0.788, green: 0.827, blue: 0.902))     // #C9D3E6 platinum silver
+    static let sapphire = Color(
+        light: Color(red: 0.184, green: 0.384, blue: 0.851),   // #2F62D9 royal sapphire
+        dark: Color(red: 0.239, green: 0.482, blue: 1.000))     // #3D7BFF electric sapphire
+    static let sapphireGlow = Color(
+        light: .white,                                          // sunlit ray strips
+        dark: Color(red: 0.776, green: 0.867, blue: 1.000))     // #C6DDFF pale ray light
+    static let ivory = Color(
+        light: Color(red: 0.043, green: 0.082, blue: 0.188),   // #0B1530 navy ink (primary text)
+        dark: Color(red: 0.957, green: 0.937, blue: 0.890))     // #F4EFE3 warm ivory
+    static let ivoryDim     = silver                            // secondary text
+    static let gold = Color(
+        light: Color(red: 0.72, green: 0.52, blue: 0.10),
+        dark: Color(red: 0.85, green: 0.65, blue: 0.20))
+    static let amber = Color(
+        light: Color(red: 0.78, green: 0.47, blue: 0.05),
+        dark: Color(red: 0.90, green: 0.60, blue: 0.10))
 
     /// Brushed-gold metal for primary actions: bright top edge falling to a deep bronze base.
     static let goldGradient = LinearGradient(
@@ -199,6 +224,15 @@ enum FavoriumTheme {
     // Geometry
     static let cardRadius: CGFloat = 16
     static let rowRadius: CGFloat  = 12
+}
+
+extension Color {
+    /// A color that resolves to `light` or `dark` with the current interface style.
+    init(light: Color, dark: Color) {
+        self.init(uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark ? UIColor(dark) : UIColor(light)
+        })
+    }
 }
 
 // MARK: - Metallic gold capsule

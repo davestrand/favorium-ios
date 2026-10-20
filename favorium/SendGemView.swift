@@ -145,7 +145,6 @@ struct SendGemView: View {
                 failureView(msg)
             }
         }
-        .preferredColorScheme(.dark)
         .sheet(isPresented: $showRename) {
             if let gem = vm.gem {
                 RenameGemView(coinId: gem.id, currentName: gem.name,

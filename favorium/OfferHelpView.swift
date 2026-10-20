@@ -141,7 +141,6 @@ struct OfferHelpView: View {
                 failureView(msg)
             }
         }
-        .preferredColorScheme(.dark)
         .task { await vm.loadPeople(userId: userId) }
     }
 

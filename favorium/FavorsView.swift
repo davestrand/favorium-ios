@@ -197,7 +197,7 @@ struct FavorsView: View {
 
                         // ── Header ─────────────────────────────────────
                         StarfieldHeader(title: "Favors", subtitle: "Kindness in motion.")
-                            .padding(.top, 44)
+                            .padding(.top, 28)
                             .padding(.bottom, 8)
 
                         // ── Offer help (starts a new favor) ────────────
@@ -477,7 +477,7 @@ struct FavorsView: View {
                         .foregroundColor(vm.historyFilter == filter ? FavoriumTheme.onGold : FavoriumTheme.ivory)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
-                        .background(vm.historyFilter == filter ? FavoriumTheme.accent : Color.clear)
+                        .background(vm.historyFilter == filter ? AnyShapeStyle(FavoriumTheme.goldGradient) : AnyShapeStyle(Color.clear))
                         .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)

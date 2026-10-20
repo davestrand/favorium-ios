@@ -170,6 +170,5 @@ extension View {
                 .foregroundStyle(FavoriumTheme.silver)
         }
     }
-    .preferredColorScheme(.dark)
 }
 

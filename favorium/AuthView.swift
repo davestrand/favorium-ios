@@ -89,7 +89,6 @@ struct AuthView: View {
             .scrollDismissesKeyboard(.interactively)
         }
         .toolbar(.hidden, for: .navigationBar)
-        .preferredColorScheme(.dark)
         .animation(.easeInOut(duration: 0.25), value: vm.mode)
     }
 

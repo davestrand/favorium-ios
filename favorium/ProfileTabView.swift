@@ -65,7 +65,7 @@ struct ProfileTabView: View {
                     VStack(spacing: 0) {
                         // ── Header ────────────────────────────────────
                         StarfieldHeader(title: "Profile", subtitle: appVM.displayName)
-                            .padding(.top, 44)
+                            .padding(.top, 28)
                             .padding(.bottom, 24)
 
                         // ── Avatar / name ─────────────────────────────
