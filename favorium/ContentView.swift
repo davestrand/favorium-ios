@@ -40,6 +40,10 @@ struct ContentView: View {
         // Live favor updates for whoever is signed in; stops on sign-out
         .task(id: appVM.userId) {
             if let userId = appVM.userId {
+                // Foreground pushes refresh screens and show the in-app banner
+                push.onForegroundPush = { [notifications] title, body, favorId, kind in
+                    Task { await notifications.receivedForegroundPush(title: title, body: body, favorId: favorId, kind: kind) }
+                }
                 await push.signedIn(userId: userId)
                 await notifications.start(userId: userId)
             } else {

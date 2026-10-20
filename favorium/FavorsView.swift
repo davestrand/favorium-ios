@@ -60,6 +60,11 @@ final class FavorsViewModel {
 
     var hasPending: Bool { pendingCount > 0 }
 
+    /// Identity of everything in Pending, so the list animates when favors arrive or resolve
+    var pendingIDs: [UUID] {
+        (offersToMe + awaitingMyGem + helpingMe + myOffersInFlight).map(\.id)
+    }
+
     /// Finished favors (gem given, declined or cancelled) filtered per picker
     var historyItems: [SupabaseService.Favor] {
         let completed = (incoming + outgoing)
@@ -246,6 +251,8 @@ struct FavorsView: View {
                     }
                 }
                 .animation(.easeInOut(duration: 0.35), value: vm.hasPending)
+                // New or resolved favors slide in/out instead of popping
+                .animation(.spring(response: 0.45, dampingFraction: 0.85), value: vm.pendingIDs)
                 .animation(.easeInOut(duration: 0.4), value: vm.loadState)
             }
             .navigationBarHidden(true)

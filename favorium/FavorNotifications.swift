@@ -41,6 +41,9 @@ final class FavorNotificationCenter {
     private var nameCache: [UUID: String] = [:]
     /// Favors the user just changed themselves — don't notify them about their own action
     private var locallyChanged: Set<UUID> = []
+    /// Recently shown "favorId-status" events, so a push and a live update for the same
+    /// change don't both show a banner
+    private var recentlyShown: [String: Date] = [:]
 
     // MARK: - Lifecycle
 
@@ -77,7 +80,9 @@ final class FavorNotificationCenter {
         do {
             try await channel.subscribeWithError()
         } catch {
-            // Live updates are a convenience; screens still refresh on appear / pull.
+            // Live updates are a convenience; screens still refresh on appear / pull,
+            // and pushes received in the foreground also trigger a refresh.
+            print("⚠️ Favor live updates unavailable: \(error)")
         }
         await refreshActionCount()
     }
@@ -144,7 +149,7 @@ final class FavorNotificationCenter {
 
         guard let message = Self.message(status: status, iAmHelper: iAmHelper, isInsert: isInsert,
                                          name: name, description: description, gemName: gemName) else { return }
-        show(message)
+        show(message, key: "\(favorId.uuidString.lowercased())-\(status)")
     }
 
     /// What to tell this user about a favor change — nil when it's their own move.
@@ -204,8 +209,26 @@ final class FavorNotificationCenter {
         return String(collapsed.prefix(89)).trimmingCharacters(in: .whitespaces) + "\u{2026}"
     }
 
+    /// A push arrived while the app is open (the system banner is suppressed). Treat it
+    /// as a change signal so screens refresh even if Realtime isn't delivering, and show
+    /// the in-app banner with the push's own (contract) wording.
     @MainActor
-    private func show(_ message: FavorBanner) {
+    func receivedForegroundPush(title: String, body: String?, favorId: String?, kind: String?) async {
+        changeToken += 1
+        await refreshActionCount()
+        let icon = kind == "transferred" ? "gift.fill" : "hand.raised.fill"
+        let key = favorId.map { "\($0.lowercased())-\(kind ?? "")" }
+        show(FavorBanner(title: title, detail: body, icon: icon), key: key)
+    }
+
+    @MainActor
+    private func show(_ message: FavorBanner, key: String? = nil) {
+        if let key {
+            let now = Date()
+            recentlyShown = recentlyShown.filter { now.timeIntervalSince($0.value) < 30 }
+            if recentlyShown[key] != nil { return }   // already shown via the other channel
+            recentlyShown[key] = now
+        }
         banner = message
         dismissTask?.cancel()
         dismissTask = Task { [weak self] in

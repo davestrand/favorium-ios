@@ -25,6 +25,8 @@ final class PushManager: NSObject {
     private(set) var authorizationStatus: UNAuthorizationStatus = .notDetermined
     /// Set when the user taps a push; ContentView consumes it and switches tabs
     var pendingRoute: Route?
+    /// Called when a push arrives while the app is open (wired up by ContentView)
+    var onForegroundPush: ((_ title: String, _ body: String?, _ favorId: String?, _ kind: String?) -> Void)?
 
     private var deviceToken: String?
     private var userId: UUID?
@@ -130,7 +132,17 @@ extension PushManager: UNUserNotificationCenterDelegate {
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping @Sendable (UNNotificationPresentationOptions) -> Void
     ) {
-        DispatchQueue.main.async { completionHandler([]) }
+        // Read what we need here; the notification object isn't Sendable
+        let content = notification.request.content
+        let title = content.title
+        let body = content.body.isEmpty ? nil : content.body
+        let favorId = content.userInfo["favorId"] as? String
+        let kind = content.userInfo["kind"] as? String
+        DispatchQueue.main.async {
+            // Refresh screens + show the in-app banner instead of a system one
+            PushManager.shared.onForegroundPush?(title, body, favorId, kind)
+            completionHandler([])
+        }
     }
 
     /// Tapping a push opens the matching tab.
