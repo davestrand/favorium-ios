@@ -2,75 +2,89 @@
 //  SendGemView.swift
 //  favorium
 //
-//  Send-a-gem sheet: recipient selection, purpose (thank / ask), message,
-//  and review step. Maps to transfer_coin RPC on the existing backend.
-//  Does NOT invent new statuses — uses propose_favor + transfer_coin as on web.
+//  "Give a gem" sheet — the final step of the favor flow. A gem can only move
+//  as thanks for a completed favor: the signed-in user must be the *helped*
+//  person on a favor in `completed` status that hasn't received a coin yet
+//  (enforced server-side by transfer_coin). The gem goes to that favor's helper.
+//
+//  Can be opened from either side:
+//   • from a gem (Collection / gem detail) → the user picks which favor to thank
+//   • from a favor (Favors tab)            → the user picks which gem to give
 //
 
 import SwiftUI
+
+/// The minimal gem info needed to preview and give a gem.
+struct GiftableGem: Identifiable, Hashable {
+    let id: UUID
+    let name: String
+    let transferCount: Int
+    let dna: SupabaseService.GemDNA?
+
+    static func == (lhs: GiftableGem, rhs: GiftableGem) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
+
+    init(id: UUID, name: String, transferCount: Int, dna: SupabaseService.GemDNA?) {
+        self.id = id
+        self.name = name
+        self.transferCount = transferCount
+        self.dna = dna
+    }
+
+    init(_ coin: SupabaseService.CoinSummary) {
+        self.init(id: coin.id, name: coin.name ?? "Gem",
+                  transferCount: coin.transfer_count ?? 0, dna: coin.gemDNA)
+    }
+}
 
 // MARK: - View Model
 
 @Observable
 final class SendGemViewModel {
-    enum Purpose { case thank, ask }
-    enum Step    { case compose, review, sending, done, failed(String) }
+    enum Step { case choose, review, sending, done, failed(String) }
 
-    // Form state
-    var recipient: SupabaseService.UserProfile?
-    var purpose: Purpose = .thank
-    var message: String = ""
+    var gem: GiftableGem?
+    var favor: SupabaseService.Favor?
 
-    // Search
-    var searchQuery: String = ""
-    var searchResults: [SupabaseService.UserProfile] = []
-    var isSearching: Bool = false
+    /// Options shown when the matching side wasn't provided up front
+    var heldGems: [GiftableGem] = []
+    var favorsAwaitingGem: [SupabaseService.Favor] = []
+    var isLoading = false
+    var loadError: String?
 
-    // Flow
-    var step: Step = .compose
+    var step: Step = .choose
 
+    var canReview: Bool { gem != nil && favor != nil }
+
+    /// Load whichever side the user still needs to pick.
     @MainActor
-    func searchUsers() async {
-        guard searchQuery.count >= 2 else { searchResults = []; return }
-        isSearching = true
-        defer { isSearching = false }
-        searchResults = (try? await SupabaseService.shared.searchUsers(query: searchQuery)) ?? []
+    func loadOptions(userId: UUID?, needGems: Bool, needFavors: Bool) async {
+        guard let userId else { loadError = "You need to be signed in."; return }
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            if needFavors {
+                // Favors I received, confirmed complete, and not yet thanked with a gem
+                favorsAwaitingGem = try await SupabaseService.shared.myIncomingFavors(userId: userId)
+                    .filter { $0.isCompleted && $0.coin_id == nil }
+            }
+            if needGems {
+                heldGems = try await SupabaseService.shared.myFavors(userId: userId).map(GiftableGem.init)
+            }
+        } catch {
+            loadError = error.localizedDescription
+        }
     }
 
     @MainActor
-    func send(coinId: UUID, fromUserId: UUID?) async {
-        guard let recipientId = recipient?.id,
-              fromUserId != nil else {
-            step = .failed("Missing required information.")
-            return
-        }
-
+    func send() async {
+        guard let gem, let favor else { return }
         step = .sending
-
         do {
-            // 1. Propose the favor (creates the favor record)
-            let favorId = try await SupabaseService.shared.proposeFavor(
-                helpedUserId: recipientId,
-                description: message.isEmpty ? purposeDefaultMessage : message
-            )
-
-            // 2. Transfer the gem (links gem to the favor + transfers ownership)
-            try await SupabaseService.shared.transferCoin(favorId: favorId, coinId: coinId)
-
+            try await SupabaseService.shared.transferCoin(favorId: favor.id, coinId: gem.id)
             step = .done
         } catch {
             step = .failed(error.localizedDescription)
-        }
-    }
-
-    var canProceedToReview: Bool {
-        recipient != nil && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    private var purposeDefaultMessage: String {
-        switch purpose {
-        case .thank: return "Thank you"
-        case .ask:   return "I'd love your help with something"
         }
     }
 }
@@ -78,286 +92,255 @@ final class SendGemViewModel {
 // MARK: - Main View
 
 struct SendGemView: View {
-    let coinId: UUID
-    let coinName: String
-    let transferCount: Int
+    /// Pre-selected gem (opened from Collection / gem detail), or nil to pick one.
+    let initialGem: GiftableGem?
+    /// Pre-selected favor (opened from the Favors tab), or nil to pick one.
+    let initialFavor: SupabaseService.Favor?
     let userId: UUID?
     let onComplete: () -> Void
 
     @State private var vm = SendGemViewModel()
     @Environment(\.dismiss) private var dismiss
 
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                FavoriumTheme.background.ignoresSafeArea()
-
-                switch vm.step {
-                case .compose:
-                    composeView
-                case .review:
-                    reviewView
-                case .sending:
-                    sendingView
-                case .done:
-                    doneView
-                case .failed(let msg):
-                    failureView(msg)
-                }
-            }
-            .navigationBarHidden(true)
-        }
-        .preferredColorScheme(.dark)
+    init(
+        initialGem: GiftableGem? = nil,
+        initialFavor: SupabaseService.Favor? = nil,
+        userId: UUID?,
+        onComplete: @escaping () -> Void
+    ) {
+        self.initialGem = initialGem
+        self.initialFavor = initialFavor
+        self.userId = userId
+        self.onComplete = onComplete
     }
 
-    // MARK: - Compose step
+    var body: some View {
+        ZStack {
+            FavoriumTheme.background.ignoresSafeArea()
 
-    private var composeView: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                // Nav bar
-                HStack {
-                    Button { dismiss() } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundColor(FavoriumTheme.ivory)
-                            .frame(width: 40, height: 40)
-                            .background(FavoriumTheme.surface)
-                            .clipShape(Circle())
-                    }
-                    Spacer()
-                    Text("Send a gem")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(FavoriumTheme.ivory)
-                    Spacer()
-                    // Balance
-                    Color.clear.frame(width: 40, height: 40)
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 56)
-                .padding(.bottom, 16)
-
-                // Gem preview
-                gemPreview
-                    .padding(.bottom, 24)
-
-                // Form fields
+            switch vm.step {
+            case .choose:
+                chooseView
+            case .review:
+                reviewView
+            case .sending:
                 VStack(spacing: 20) {
-                    recipientField
-                    purposeField
-                    messageField
+                    ProgressView().tint(FavoriumTheme.accent).scaleEffect(1.6)
+                    Text("Giving your gem…")
+                        .font(FavoriumTheme.bodyFont)
+                        .foregroundColor(FavoriumTheme.ivoryDim)
                 }
-                .padding(.horizontal, 20)
+            case .done:
+                doneView
+            case .failed(let msg):
+                failureView(msg)
+            }
+        }
+        .preferredColorScheme(.dark)
+        .task {
+            vm.gem = initialGem
+            vm.favor = initialFavor
+            await vm.loadOptions(userId: userId,
+                                 needGems: initialGem == nil,
+                                 needFavors: initialFavor == nil)
+        }
+    }
 
-                // Review button
-                Button {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        vm.step = .review
+    // MARK: - Choose step
+
+    private var chooseView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                navBar(title: "Give a gem", leading: "xmark") { dismiss() }
+
+                if let gem = vm.gem {
+                    gemPreview(gem)
+                        .frame(maxWidth: .infinity)
+                        .overlay(alignment: .topTrailing) {
+                            if initialGem == nil {
+                                changeButton { vm.gem = nil }
+                            }
+                        }
+                } else {
+                    gemPicker
+                }
+
+                if let favor = vm.favor {
+                    VStack(alignment: .leading, spacing: 8) {
+                        sectionLabel("For")
+                        favorRow(favor, isSelected: true)
+                            .overlay(alignment: .topTrailing) {
+                                if initialFavor == nil {
+                                    changeButton { vm.favor = nil }.padding(8)
+                                }
+                            }
                     }
+                } else {
+                    favorPicker
+                }
+
+                if let error = vm.loadError {
+                    Text(error)
+                        .font(FavoriumTheme.captionFont)
+                        .foregroundColor(FavoriumTheme.amber)
+                }
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.3)) { vm.step = .review }
                 } label: {
                     HStack {
                         Text("Review gift")
                             .fontWeight(.semibold)
                         Image(systemName: "chevron.right")
                     }
-                    .foregroundColor(.black)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
-                    .background(vm.canProceedToReview ? FavoriumTheme.teal : FavoriumTheme.tealMuted.opacity(0.4))
-                    .clipShape(Capsule())
+                    .metallicGoldCapsule()
+                    .opacity(vm.canReview ? 1.0 : 0.4)
                 }
-                .disabled(!vm.canProceedToReview)
-                .padding(.horizontal, 20)
-                .padding(.top, 28)
-                .padding(.bottom, 40)
+                .disabled(!vm.canReview)
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 40)
+        }
+    }
+
+    // MARK: - Favor picker
+
+    @ViewBuilder
+    private var favorPicker: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionLabel("Which favor are you thanking them for?")
+
+            if vm.isLoading {
+                ProgressView().tint(FavoriumTheme.accent).frame(maxWidth: .infinity)
+            } else if vm.favorsAwaitingGem.isEmpty {
+                // Explain how gems are earned instead of showing an empty list
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("No favors waiting for a gem", systemImage: "hourglass")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(FavoriumTheme.ivory)
+                    Text("Gems are given to thank someone for a favor they did for you. When someone offers to help, accept it in the Favors tab, then confirm it's done. It will show up here.")
+                        .font(FavoriumTheme.captionFont)
+                        .foregroundColor(FavoriumTheme.ivoryDim)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(FavoriumTheme.surface)
+                .clipShape(RoundedRectangle(cornerRadius: FavoriumTheme.cardRadius))
+            } else {
+                ForEach(vm.favorsAwaitingGem) { favor in
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) { vm.favor = favor }
+                    } label: {
+                        favorRow(favor, isSelected: false)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         }
     }
 
-    // MARK: - Gem preview
+    private func favorRow(_ favor: SupabaseService.Favor, isSelected: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("\(favor.helper_name ?? "Someone") helped you")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(FavoriumTheme.ivory)
+            Text(favor.description)
+                .font(FavoriumTheme.captionFont)
+                .foregroundColor(FavoriumTheme.ivoryDim)
+                .lineLimit(2)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(FavoriumTheme.surface)
+        .clipShape(RoundedRectangle(cornerRadius: FavoriumTheme.rowRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: FavoriumTheme.rowRadius)
+                .stroke(isSelected ? FavoriumTheme.accent.opacity(0.6) : FavoriumTheme.accentMuted.opacity(0.25),
+                        lineWidth: 1)
+        )
+    }
 
-    private var gemPreview: some View {
-        let tier = Tier.from(transferCount: transferCount)
-        let gemColor = tier.defaultColor
+    // MARK: - Gem picker
+
+    @ViewBuilder
+    private var gemPicker: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionLabel("Which gem will you give?")
+
+            if vm.isLoading {
+                ProgressView().tint(FavoriumTheme.accent).frame(maxWidth: .infinity)
+            } else if vm.heldGems.isEmpty {
+                Text("You don't hold any gems right now.")
+                    .font(FavoriumTheme.captionFont)
+                    .foregroundColor(FavoriumTheme.ivoryDim)
+            } else {
+                ForEach(vm.heldGems) { gem in
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) { vm.gem = gem }
+                    } label: {
+                        HStack(spacing: 14) {
+                            gemImage(gem, size: 46, showGlow: false)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(gem.name)
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(FavoriumTheme.ivory)
+                                Text(Tier.from(transferCount: gem.transferCount).displayName)
+                                    .font(FavoriumTheme.captionFont)
+                                    .foregroundColor(FavoriumTheme.ivoryDim)
+                            }
+                            Spacer()
+                        }
+                        .padding(12)
+                        .background(FavoriumTheme.surface)
+                        .clipShape(RoundedRectangle(cornerRadius: FavoriumTheme.rowRadius))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    // MARK: - Gem rendering
+
+    private func gemColor(_ gem: GiftableGem) -> Color {
+        gem.dna?.gemColor ?? Tier.from(transferCount: gem.transferCount).defaultColor
+    }
+
+    private func gemImage(_ gem: GiftableGem, size: CGFloat, showGlow: Bool) -> some View {
+        FavorGemView(
+            dna: gem.dna,
+            transferCount: gem.transferCount,
+            size: size,
+            showGlow: showGlow,
+            showShimmer: showGlow
+        )
+    }
+
+    private func gemPreview(_ gem: GiftableGem) -> some View {
+        let tier   = Tier.from(transferCount: gem.transferCount)
+        let family = GemFamily.from(gem.dna?.resolvedFamily)
         return VStack(spacing: 10) {
             ZStack {
                 RadialGradient(
-                    colors: [gemColor.opacity(0.18), .clear],
+                    colors: [gemColor(gem).opacity(0.18), .clear],
                     center: .center, startRadius: 20, endRadius: 130
                 )
                 .frame(width: 260, height: 260)
                 .blur(radius: 20)
 
-                AnimatedFavorGemView(
-                    gemFamily: .lightning,
-                    tier: tier,
-                    gemColor: gemColor,
-                    size: 180
-                )
+                // Same renderer as the detail page so the gem looks identical
+                gemImage(gem, size: 180, showGlow: true)
             }
-            Text(coinName)
+            .frame(height: 220)
+            Text(gem.name)
                 .font(.system(size: 22, weight: .bold, design: .serif))
                 .foregroundColor(FavoriumTheme.ivory)
-            Text("Heart · \(tier.displayName)")
+            Text("\(family.displayName) · \(tier.displayName)")
                 .font(FavoriumTheme.captionFont)
                 .foregroundColor(tier.defaultColor)
-            Text("A gem of kindness, gratitude and bright connections.")
-                .font(FavoriumTheme.captionFont)
-                .foregroundColor(FavoriumTheme.ivoryDim)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
-        }
-    }
-
-    // MARK: - Recipient field
-
-    @ViewBuilder
-    private var recipientField: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("To")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(FavoriumTheme.ivoryDim)
-
-            if let chosen = vm.recipient {
-                // Chosen — show chip with clear button
-                HStack {
-                    Circle()
-                        .fill(FavoriumTheme.teal.opacity(0.3))
-                        .frame(width: 28, height: 28)
-                        .overlay(
-                            Text(String(chosen.displayName.prefix(1)).uppercased())
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundColor(FavoriumTheme.teal)
-                        )
-                    Text(chosen.displayName)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(FavoriumTheme.ivory)
-                    Spacer()
-                    Button { vm.recipient = nil; vm.searchQuery = "" } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(FavoriumTheme.ivoryDim)
-                    }
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 13))
-                        .foregroundColor(FavoriumTheme.ivoryDim)
-                }
-                .padding(12)
-                .background(FavoriumTheme.surface)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(FavoriumTheme.teal.opacity(0.4), lineWidth: 1))
-
-            } else {
-                // Search field
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(FavoriumTheme.ivoryDim)
-                    TextField("Search by name", text: $vm.searchQuery)
-                        .foregroundColor(FavoriumTheme.ivory)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                }
-                .padding(12)
-                .background(FavoriumTheme.surface)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .onChange(of: vm.searchQuery) { _, _ in
-                    Task { await vm.searchUsers() }
-                }
-
-                if vm.isSearching {
-                    ProgressView().tint(FavoriumTheme.teal).padding(.top, 4)
-                } else if !vm.searchResults.isEmpty {
-                    VStack(spacing: 0) {
-                        ForEach(vm.searchResults) { user in
-                            Button {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    vm.recipient = user
-                                    vm.searchQuery = ""
-                                    vm.searchResults = []
-                                }
-                            } label: {
-                                HStack {
-                                    Circle()
-                                        .fill(FavoriumTheme.tealMuted.opacity(0.3))
-                                        .frame(width: 30, height: 30)
-                                        .overlay(
-                                            Text(String(user.displayName.prefix(1)).uppercased())
-                                                .font(.system(size: 13, weight: .bold))
-                                                .foregroundColor(FavoriumTheme.teal)
-                                        )
-                                    Text(user.displayName)
-                                        .font(.system(size: 15))
-                                        .foregroundColor(FavoriumTheme.ivory)
-                                    Spacer()
-                                }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 10)
-                            }
-                            .buttonStyle(.plain)
-                            if user.id != vm.searchResults.last?.id {
-                                Divider().background(FavoriumTheme.tealMuted.opacity(0.2))
-                            }
-                        }
-                    }
-                    .background(FavoriumTheme.surfaceHigh)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                }
-            }
-        }
-    }
-
-    // MARK: - Purpose field
-
-    private var purposeField: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Purpose")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(FavoriumTheme.ivoryDim)
-
-            HStack(spacing: 10) {
-                PurposeButton(
-                    label: "Thank someone",
-                    icon: "heart",
-                    isSelected: vm.purpose == .thank,
-                    action: { withAnimation { vm.purpose = .thank } }
-                )
-                PurposeButton(
-                    label: "Ask a favor",
-                    icon: "sparkles",
-                    isSelected: vm.purpose == .ask,
-                    action: { withAnimation { vm.purpose = .ask } }
-                )
-            }
-        }
-    }
-
-    // MARK: - Message field
-
-    private var messageField: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Your message")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(FavoriumTheme.ivoryDim)
-
-            ZStack(alignment: .topLeading) {
-                if vm.message.isEmpty {
-                    Text(vm.purpose == .thank
-                         ? "Thank you for helping with…"
-                         : "I'd love your help with…")
-                        .font(FavoriumTheme.bodyFont)
-                        .foregroundColor(FavoriumTheme.ivoryDim)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 14)
-                }
-                TextEditor(text: $vm.message)
-                    .font(FavoriumTheme.bodyFont)
-                    .foregroundColor(FavoriumTheme.ivory)
-                    .scrollContentBackground(.hidden)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 10)
-                    .frame(minHeight: 80)
-            }
-            .background(FavoriumTheme.surface)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
         }
     }
 
@@ -365,64 +348,48 @@ struct SendGemView: View {
 
     private var reviewView: some View {
         VStack(spacing: 0) {
-            // Nav
-            HStack {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.25)) { vm.step = .compose }
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundColor(FavoriumTheme.ivory)
-                        .frame(width: 40, height: 40)
-                        .background(FavoriumTheme.surface)
-                        .clipShape(Circle())
-                }
-                Spacer()
-                Text("Review gift")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(FavoriumTheme.ivory)
-                Spacer()
-                Color.clear.frame(width: 40, height: 40)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 56)
-            .padding(.bottom, 24)
-
-            // Review card
-            VStack(spacing: 16) {
-                gemPreview
-                    .padding(.bottom, 8)
-
-                VStack(spacing: 12) {
-                    reviewRow(label: "To",      value: vm.recipient?.displayName ?? "—")
-                    reviewRow(label: "Purpose", value: vm.purpose == .thank ? "Thank someone" : "Ask a favor")
-                    reviewRow(label: "Message", value: vm.message)
-                }
-                .padding(16)
-                .background(FavoriumTheme.surface)
-                .clipShape(RoundedRectangle(cornerRadius: FavoriumTheme.cardRadius))
-                .padding(.horizontal, 20)
-            }
-
-            Spacer()
-
-            // Confirm send
-            Button {
-                Task { await vm.send(coinId: coinId, fromUserId: userId) }
-            } label: {
-                HStack {
-                    Image(systemName: "paperplane.fill")
-                    Text("Send gem")
-                        .fontWeight(.semibold)
-                }
-                .foregroundColor(.black)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(FavoriumTheme.teal)
-                .clipShape(Capsule())
+            navBar(title: "Review gift", leading: "chevron.left") {
+                withAnimation(.easeInOut(duration: 0.25)) { vm.step = .choose }
             }
             .padding(.horizontal, 20)
-            .padding(.bottom, 40)
+
+            if let gem = vm.gem, let favor = vm.favor {
+                ScrollView {
+                    VStack(spacing: 20) {
+                        gemPreview(gem)
+
+                        VStack(alignment: .leading, spacing: 12) {
+                            reviewRow(label: "To", value: favor.helper_name ?? "Your helper")
+                            reviewRow(label: "For", value: favor.description)
+                        }
+                        .padding(16)
+                        .background(FavoriumTheme.surface)
+                        .clipShape(RoundedRectangle(cornerRadius: FavoriumTheme.cardRadius))
+
+                        Text("Once given, this gem belongs to \(favor.helper_name ?? "them") and continues its journey from there.")
+                            .font(FavoriumTheme.captionFont)
+                            .foregroundColor(FavoriumTheme.ivoryDim)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.horizontal, 20)
+                }
+            }
+
+            Button {
+                Task { await vm.send() }
+            } label: {
+                HStack {
+                    Image(systemName: "gift.fill")
+                    Text("Give gem")
+                        .fontWeight(.semibold)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .metallicGoldCapsule()
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 24)
         }
     }
 
@@ -431,60 +398,41 @@ struct SendGemView: View {
             Text(label)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(FavoriumTheme.ivoryDim)
-                .frame(width: 70, alignment: .leading)
+                .frame(width: 50, alignment: .leading)
             Text(value)
                 .font(.system(size: 15))
                 .foregroundColor(FavoriumTheme.ivory)
-            Spacer()
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
         }
     }
 
-    // MARK: - Sending / Done / Failure
-
-    private var sendingView: some View {
-        VStack(spacing: 20) {
-            Spacer()
-            ProgressView()
-                .tint(FavoriumTheme.teal)
-                .scaleEffect(1.6)
-            Text("Sending gem…")
-                .font(FavoriumTheme.bodyFont)
-                .foregroundColor(FavoriumTheme.ivoryDim)
-            Spacer()
-        }
-    }
+    // MARK: - Done / Failure
 
     private var doneView: some View {
         VStack(spacing: 24) {
             Spacer()
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 64))
-                .foregroundColor(FavoriumTheme.teal)
-                .transition(.scale.combined(with: .opacity))
-
-            Text("Gem sent!")
+                .foregroundColor(FavoriumTheme.accent)
+            Text("Gem given!")
                 .font(.system(size: 28, weight: .bold, design: .serif))
                 .foregroundColor(FavoriumTheme.ivory)
-
-            Text("Your gem is on its way to \(vm.recipient?.displayName ?? "them").")
+            Text("\(vm.gem?.name ?? "Your gem") is now with \(vm.favor?.helper_name ?? "them"). Thank you for passing on the kindness.")
                 .font(FavoriumTheme.bodyFont)
                 .foregroundColor(FavoriumTheme.ivoryDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
-
             Spacer()
-
             Button {
                 onComplete()
                 dismiss()
             } label: {
                 Text("Done")
                     .fontWeight(.semibold)
-                    .foregroundColor(.black)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
-                    .background(FavoriumTheme.teal)
-                    .clipShape(Capsule())
+                    .metallicGoldCapsule()
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 40)
@@ -497,7 +445,7 @@ struct SendGemView: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 52))
                 .foregroundColor(FavoriumTheme.amber)
-            Text("Something went wrong")
+            Text("Couldn't give this gem")
                 .font(.system(size: 22, weight: .bold))
                 .foregroundColor(FavoriumTheme.ivory)
             Text(message)
@@ -508,9 +456,9 @@ struct SendGemView: View {
             Spacer()
             HStack(spacing: 12) {
                 Button {
-                    withAnimation { vm.step = .compose }
+                    withAnimation { vm.step = .choose }
                 } label: {
-                    Text("Edit")
+                    Text("Back")
                         .fontWeight(.semibold)
                         .foregroundColor(FavoriumTheme.ivory)
                         .frame(maxWidth: .infinity)
@@ -519,60 +467,58 @@ struct SendGemView: View {
                         .clipShape(Capsule())
                 }
                 Button {
-                    Task { await vm.send(coinId: coinId, fromUserId: userId) }
+                    Task { await vm.send() }
                 } label: {
                     Text("Try again")
                         .fontWeight(.semibold)
-                        .foregroundColor(.black)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(FavoriumTheme.teal)
-                        .clipShape(Capsule())
+                        .metallicGoldCapsule()
                 }
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 40)
         }
     }
-}
 
-// MARK: - Purpose Button
+    // MARK: - Shared pieces
 
-private struct PurposeButton: View {
-    let label: String
-    let icon: String
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 13))
-                Text(label)
-                    .font(.system(size: 14, weight: .semibold))
+    private func navBar(title: String, leading: String, action: @escaping () -> Void) -> some View {
+        HStack {
+            Button(action: action) {
+                Image(systemName: leading)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(FavoriumTheme.ivory)
+                    .frame(width: 40, height: 40)
+                    .background(FavoriumTheme.surface)
+                    .clipShape(Circle())
             }
-            .foregroundColor(isSelected ? .black : FavoriumTheme.ivory)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background(isSelected ? FavoriumTheme.teal : FavoriumTheme.surface)
-            .clipShape(Capsule())
-            .overlay(
-                Capsule().stroke(
-                    isSelected ? Color.clear : FavoriumTheme.tealMuted.opacity(0.4),
-                    lineWidth: 1
-                )
-            )
+            Spacer()
+            Text(title)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(FavoriumTheme.ivory)
+            Spacer()
+            Color.clear.frame(width: 40, height: 40)
         }
-        .buttonStyle(.plain)
+        .padding(.top, 16)
+    }
+
+    private func sectionLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 13, weight: .medium))
+            .foregroundColor(FavoriumTheme.ivoryDim)
+    }
+
+    private func changeButton(_ action: @escaping () -> Void) -> some View {
+        Button("Change", action: action)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundColor(FavoriumTheme.accent)
     }
 }
 
-#Preview("Send Gem") {
+#Preview("Give a gem") {
     SendGemView(
-        coinId: UUID(),
-        coinName: "Rainbow Heart",
-        transferCount: 8,
+        initialGem: GiftableGem(id: UUID(), name: "Rainbow Heart", transferCount: 8, dna: nil),
         userId: nil,
         onComplete: {}
     )

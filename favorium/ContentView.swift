@@ -67,7 +67,7 @@ struct ContentView: View {
                     Label("Profile", systemImage: "person")
                 }
         }
-        .tint(FavoriumTheme.teal)
+        .tint(FavoriumTheme.accent)
         .preferredColorScheme(.dark)
     }
 
@@ -80,7 +80,7 @@ struct ContentView: View {
                 FavorGemView(
                     gemFamily: .lightning,
                     tier: .legacy,
-                    gemColor: FavoriumTheme.teal,
+                    gemColor: FavoriumTheme.accent,
                     size: 120,
                     showGlow: true
                 )
@@ -102,18 +102,35 @@ struct ContentView: View {
 
 // MARK: - Theme
 
-/// Centralized design tokens for the Favorium midnight-teal aesthetic.
+/// Centralized design tokens for the Favorium "midnight velvet & gold" aesthetic —
+/// a velvet-lined jewelry case: deep plum-navy backgrounds, brushed-gold actions,
+/// champagne accents and lavender-silver secondary text.
 enum FavoriumTheme {
     // Colors
-    static let background   = Color(red: 0.04, green: 0.10, blue: 0.12)   // midnight teal
-    static let surface      = Color(red: 0.07, green: 0.14, blue: 0.17)   // slightly lighter panel
-    static let surfaceHigh  = Color(red: 0.10, green: 0.19, blue: 0.22)
-    static let teal         = Color(red: 0.20, green: 0.85, blue: 0.75)   // vivid teal accent
-    static let tealMuted    = Color(red: 0.15, green: 0.55, blue: 0.50)
-    static let ivory        = Color(red: 0.96, green: 0.94, blue: 0.88)   // warm off-white
-    static let ivoryDim     = Color(red: 0.96, green: 0.94, blue: 0.88).opacity(0.55)
+    static let background   = Color(red: 0.086, green: 0.039, blue: 0.149)  // #160A26 deep violet velvet
+    static let surface      = Color(red: 0.141, green: 0.078, blue: 0.227)  // #24143A plum panel
+    static let surfaceHigh  = Color(red: 0.200, green: 0.125, blue: 0.310)  // #33204F raised panel
+    static let accent       = Color(red: 0.961, green: 0.788, blue: 0.353)  // #F5C95A rich gold
+    static let accentMuted  = Color(red: 0.722, green: 0.576, blue: 0.247)  // #B8933F antique gold (spines, borders)
+    static let silver       = Color(red: 0.765, green: 0.706, blue: 0.871)  // #C3B4DE lavender silver
+    static let ivory        = Color(red: 0.965, green: 0.945, blue: 0.906)  // #F6F1E7 warm ivory
+    static let ivoryDim     = silver                                         // secondary text
     static let gold         = Color(red: 0.85, green: 0.65, blue: 0.20)
     static let amber        = Color(red: 0.90, green: 0.60, blue: 0.10)
+
+    /// Brushed-gold metal for primary actions: bright top edge falling to a deep bronze base.
+    static let goldGradient = LinearGradient(
+        stops: [
+            .init(color: Color(red: 1.000, green: 0.878, blue: 0.541), location: 0.0),   // #FFE08A highlight
+            .init(color: Color(red: 0.878, green: 0.659, blue: 0.180), location: 0.55),  // #E0A82E body
+            .init(color: Color(red: 0.604, green: 0.396, blue: 0.071), location: 1.0)    // #9A6512 shadow
+        ],
+        startPoint: .top,
+        endPoint: .bottom
+    )
+
+    /// Dark text color for use on gold surfaces — warmer and richer than pure black.
+    static let onGold       = Color(red: 0.16, green: 0.10, blue: 0.05)
 
     // Fonts
     static let titleFont    = Font.system(size: 36, weight: .bold, design: .serif)
@@ -124,6 +141,31 @@ enum FavoriumTheme {
     // Geometry
     static let cardRadius: CGFloat = 16
     static let rowRadius: CGFloat  = 12
+}
+
+// MARK: - Metallic gold capsule
+
+extension View {
+    /// Polished-gold capsule for primary buttons: gradient metal body plus a thin
+    /// specular rim so it reads as a physical, reflective surface.
+    func metallicGoldCapsule() -> some View {
+        self
+            .foregroundColor(FavoriumTheme.onGold)
+            .background(FavoriumTheme.goldGradient)
+            .clipShape(Capsule())
+            .overlay(
+                Capsule()
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [.white.opacity(0.55), .white.opacity(0.05), .black.opacity(0.25)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 1
+                    )
+            )
+            .shadow(color: FavoriumTheme.gold.opacity(0.25), radius: 10, y: 4)
+    }
 }
 
 // MARK: - Reusable star-sparkle header background
@@ -138,7 +180,7 @@ struct StarfieldHeader: View {
             Ellipse()
                 .fill(
                     RadialGradient(
-                        colors: [FavoriumTheme.teal.opacity(0.10), .clear],
+                        colors: [FavoriumTheme.accent.opacity(0.10), .clear],
                         center: .center,
                         startRadius: 10,
                         endRadius: 200

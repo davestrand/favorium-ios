@@ -123,6 +123,56 @@ enum FrameFamily: String, CaseIterable, Identifiable {
     }
 }
 
+/// A randomly assigned visual personality carried by an individual gem.
+/// Bloom-tier and above gems each get one trait at generation time that never changes.
+enum GemTrait: String, CaseIterable {
+    case starlight    // Tiny pinpoint sparkles scattered across the surface, twinkling independently
+    case rainbow      // Sweeping rainbow wash across the surface
+    case iridescent   // Butterfly-wing shimmer — color shifts with the tilt
+    case charged      // Crackling white-blue electric arcs travelling across the surface in bursts
+    case ember        // Deep inner heat glow, like a coal
+
+    // TODO: oiled      — dark rainbow slick like oil on water / dark opal, shifts with tilt
+    // TODO: fogged     — cloudy internal haze that clears toward the center, smoke-filled look
+    // TODO: frosted    — matte icy bloom around the edges (deferred — needs rethink)
+    // TODO: pulsed     — slow deep heartbeat bloom from the center outward every 2–3 seconds
+    // TODO: hollow     — glass sphere look: dark interior, bright rim, empty inside
+    // TODO: smoked     — like frosted but warm/dark brownish, gem held in flame
+    // TODO: veined     — faint branching gold/silver veins through the gem body, marble-like
+    // TODO: rusted     — warm orange-brown patina over the frame metalwork only, aged look
+    // TODO: cracked    — dark fissure network with energy leaking through (needs revisit)
+    // TODO: gilded     — animated gold sheen sweeping across the frame with the tilt (needs revisit)
+    // TODO: wet        — glossy liquid sheen (deferred — may need a dedicated overlay asset)
+
+    /// Human-readable label shown in the UI.
+    var displayName: String {
+        switch self {
+        case .starlight:  return "Starlight"
+        case .rainbow:    return "Rainbow"
+        case .iridescent: return "Iridescent"
+        case .charged:    return "Charged"
+        case .ember:      return "Ember"
+        }
+    }
+
+    /// Short user-facing description shown on the gem detail page once the trait is revealed.
+    var description: String {
+        switch self {
+        case .starlight:  return "Hidden stars glint across its facets as it turns in the light."
+        case .rainbow:    return "A full spectrum of color drifts through its heart."
+        case .iridescent: return "Its setting shimmers like a butterfly's wing, shifting with every tilt."
+        case .charged:    return "Crackling arcs of energy dance across its surface."
+        case .ember:      return "A slow inner fire glows deep within, warm as a coal."
+        }
+    }
+
+    /// Map a DNA `trait` string to a `GemTrait`. Returns nil for nil/unknown values.
+    static func from(_ string: String?) -> GemTrait? {
+        guard let string else { return nil }
+        return GemTrait(rawValue: string.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+    }
+}
+
 /// Reusable asset-based gemstone view with decorative frame.
 ///
 /// Renders a `GemFamily` gem inside its matching `FrameFamily` frame, both at the same `Tier`.
@@ -144,6 +194,8 @@ struct FavorGemView: View {
     /// When true, suppresses the built-in pendulum tilt so a parent view
     /// (e.g. AnimatedFavorGemView) can own all rotation without compounding.
     let suppressTilt: Bool
+    /// Optional persistent trait — assigned once at gem generation, nil for Seed.
+    let trait: GemTrait?
 
     /// Primary initializer. Frame family is always derived from gem family automatically.
     init(
@@ -154,7 +206,8 @@ struct FavorGemView: View {
         size: CGFloat = 200,
         showGlow: Bool = false,
         showShimmer: Bool = false,
-        suppressTilt: Bool = false
+        suppressTilt: Bool = false,
+        trait: GemTrait? = nil
     ) {
         self.gemFamily    = gemFamily
         self.frameFamily  = FrameFamily.matching(gemFamily)
@@ -165,6 +218,8 @@ struct FavorGemView: View {
         self.showGlow     = showGlow
         self.showShimmer  = showShimmer
         self.suppressTilt = suppressTilt
+        // Traits stay hidden until the gem reaches Bloom, even if the DNA already carries one
+        self.trait        = tier == .seed ? nil : trait
     }
     
     var body: some View {
@@ -184,6 +239,11 @@ struct FavorGemView: View {
             if showShimmer {
                 shimmerOverlay
             }
+
+            // 5. Persistent gem trait effect (bloom+)
+            if let trait {
+                traitOverlay(trait)
+            }
         }
         .frame(width: size, height: size)
         // Pendulum tilt — skipped when a parent view owns rotation (suppressTilt: true)
@@ -201,10 +261,19 @@ struct FavorGemView: View {
             y: 6
         )
         .onAppear {
+            if trait == .charged {
+                startChargedAnimation()
+            }
             guard !suppressTilt else { return }
             // Pendulum tilt — rocks symmetrically from -20° to +20° and back
             withAnimation(.easeInOut(duration: 4.5).repeatForever(autoreverses: true)) {
                 tilt = 20
+            }
+        }
+        .onChange(of: trait) { _, newTrait in
+            if newTrait == .charged {
+                chargedPhase = 0.0
+                startChargedAnimation()
             }
         }
     }
@@ -455,6 +524,334 @@ struct FavorGemView: View {
         }
     }
     
+    // MARK: - Gem Trait Effects
+
+    @State private var rainbowPhase: Double = 0      // Rainbow: slow background drift
+    @State private var rainbowSpin: Double = -15     // Rainbow: tilt-driven rotation
+    @State private var iridescentHueShift: Double = 0.0 // Iridescent: slow hue drift between swings
+    // Starlight: no independent animation state needed —
+    // brightness is derived from tilt angle passing through each star's trigger window.
+    @State private var emberGlow: Double = 0.4       // Ember: heat pulse
+    @State private var chargedPhase: Double = 0.0    // Charged: arc travel position (0→1 looping)
+
+    @ViewBuilder
+    private func traitOverlay(_ trait: GemTrait) -> some View {
+        switch trait {
+        case .starlight:  starlightTraitView
+        case .rainbow:    rainbowTraitView
+        case .iridescent: iridescentTraitView
+        case .charged:    chargedTraitView
+        case .ember:      emberTraitView
+        }
+    }
+
+    /// Starlight — pinpoint glints that flash only when the pendulum tilt passes
+    /// through each star's unique trigger angle. Completely silent at all other angles.
+    ///
+    /// Each star has a `triggerAngle` (in the -15…+20 range) and a narrow `window`
+    /// width. `starBrightness(trigger:window:)` returns a smooth 0→1→0 pulse using
+    /// a squared cosine so the peak is sharp and the shoulders fall off quickly.
+    /// At most 1–2 stars are near their peak at any given tilt position.
+    private var starlightTraitView: some View {
+        ZStack {
+            // Upper tip
+            starPoint(x:  0.00, y: -0.28, scale: 0.6, brightness: starBrightness(trigger: -10.0, window: 3.5))
+            starPoint(x: -0.05, y: -0.18, scale: 0.8, brightness: starBrightness(trigger:  16.0, window: 3.0))
+            // Main gem body
+            starPoint(x:  0.09, y: -0.10, scale: 1.0, brightness: starBrightness(trigger:   5.0, window: 2.5))
+            starPoint(x: -0.12, y:  0.02, scale: 1.4, brightness: starBrightness(trigger: -14.0, window: 3.0))
+            starPoint(x:  0.10, y:  0.06, scale: 1.1, brightness: starBrightness(trigger:  12.0, window: 2.5))
+            starPoint(x:  0.00, y:  0.12, scale: 1.8, brightness: starBrightness(trigger:   0.0, window: 4.0)) // hero — fires near center
+            // Lower main gem
+            starPoint(x: -0.08, y:  0.22, scale: 1.2, brightness: starBrightness(trigger:  19.0, window: 2.5))
+            starPoint(x:  0.11, y:  0.18, scale: 1.0, brightness: starBrightness(trigger:  -5.0, window: 3.0))
+            // Pendant crystal zone
+            starPoint(x: -0.22, y:  0.38, scale: 0.9, brightness: starBrightness(trigger:   9.0, window: 2.5))
+            starPoint(x:  0.20, y:  0.44, scale: 0.7, brightness: starBrightness(trigger: -13.0, window: 3.0))
+        }
+        .blendMode(.screen)
+        .mask(
+            ZStack {
+                Image(gemAssetName)
+                    .resizable()
+                    .frame(width: size, height: size)
+                Image(frameAssetName)
+                    .resizable()
+                    .frame(width: size, height: size)
+            }
+        )
+    }
+
+    /// Returns 0…1 brightness based on how close `tilt` is to `triggerAngle`.
+    /// `window` is the half-width in degrees — stars only glow within ±window of their trigger.
+    /// Uses a squared cosine for a sharp peak that falls off quickly on both sides.
+    private func starBrightness(trigger: Double, window: Double) -> Double {
+        let delta = abs(tilt - trigger)
+        guard delta < window else { return 0 }
+        let t = delta / window              // 0 at trigger, 1 at edge
+        let cosVal = cos(t * .pi / 2)       // 1 at center, 0 at edge
+        return cosVal * cosVal              // squared = sharper peak
+    }
+
+    /// A single star — hard pinpoint core, soft halo, and needle-thin cross arms
+    /// that stretch far enough to read across a coloured gem surface.
+    private func starPoint(x: Double, y: Double, scale: Double, brightness: Double) -> some View {
+        let baseSize = size * 0.07 * scale
+        // Arms are intentionally very long and hair-thin — like a lens flare needle
+        let armLength = baseSize * 7.0
+        let armThick  = max(baseSize * 0.08, 1.0)   // never thinner than 1pt on screen
+        return ZStack {
+            // Soft glow halo — gives the star presence without bulk
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [.white.opacity(0.85), .white.opacity(0.0)],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: baseSize * 0.8
+                    )
+                )
+                .frame(width: baseSize * 1.8, height: baseSize * 1.8)
+                .blur(radius: baseSize * 0.35)
+
+            // Hard bright pinpoint — tiny solid white dot at the core
+            Circle()
+                .fill(Color.white)
+                .frame(width: max(baseSize * 0.3, 2.0), height: max(baseSize * 0.3, 2.0))
+
+            // Horizontal needle arm
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        colors: [.clear, .white.opacity(0.95), .white, .white.opacity(0.95), .clear],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(width: armLength, height: armThick)
+                .blur(radius: 0.4)
+
+            // Vertical needle arm
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        colors: [.clear, .white.opacity(0.95), .white, .white.opacity(0.95), .clear],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .frame(width: armThick, height: armLength)
+                .blur(radius: 0.4)
+        }
+        .offset(x: size * x, y: size * y)
+        .opacity(brightness)
+    }
+
+    /// Rainbow — a full-spectrum colour wheel that physically spins in sync
+    /// with the pendulum tilt. `rainbowSpin` is animated with the same
+    /// easeInOut curve and duration as `tilt`, so the wheel rocks in lockstep
+    /// with the gem. A slow `rainbowPhase` drift offsets the hue stops
+    /// continuously so it never looks static.
+    private var rainbowTraitView: some View {
+        let stops: [Gradient.Stop] = (0..<12).map { i in
+            let hue = (rainbowPhase + Double(i) / 12.0)
+                .truncatingRemainder(dividingBy: 1.0)
+            return .init(
+                color: Color(hue: hue, saturation: 1.0, brightness: 1.0),
+                location: Double(i) / 12.0
+            )
+        }
+        return AngularGradient(stops: stops, center: .center)
+            .frame(width: size, height: size)
+            // rainbowSpin tracks the pendulum — same animation, 3× the angle
+            .rotationEffect(.degrees(rainbowSpin))
+            .opacity(0.50)
+            .blendMode(.color)
+            .mask(
+                Image(gemAssetName)
+                    .resizable()
+                    .frame(width: size, height: size)
+            )
+            .onAppear {
+                // Mirror the pendulum: same easing + duration as tilt, 1× range
+                withAnimation(.easeInOut(duration: 4.5).repeatForever(autoreverses: true)) {
+                    rainbowSpin = 20    // swings -15…+20, i.e. 35° total — same arc as the gem tilt
+                }
+                // Slow hue drift — one full revolution every 8 s
+                withAnimation(.linear(duration: 8.0).repeatForever(autoreverses: false)) {
+                    rainbowPhase = 1.0
+                }
+            }
+    }
+
+    /// Iridescent — a narrow butterfly-wing shimmer that rides the pendulum tilt
+    /// perfectly by deriving its position directly from `tilt` rather than running
+    /// a separate animation.
+    ///
+    /// Design notes:
+    /// - `tilt` ranges -15…+20 (35° arc). We normalise that to 0…1 and convert
+    ///   to a pixel offset so the band travels with the gem turn, not merely
+    ///   alongside it.
+    /// - The **frame** uses `.hue` blend mode — shifts colour while preserving
+    ///   luminance completely, so engraved detail, shadows and highlights all
+    ///   show through as if the metalwork is genuinely changing colour in the light.
+    /// - The **gem** uses a light `.overlay` pass so the facet structure stays
+    ///   readable underneath the shimmer.
+    /// - A sharp `.screen` specular streak sits on top of both — the thin bright
+    ///   line you see on a real butterfly wing scale.
+    /// - Palette drifts slowly via `iridescentHueShift` so each swing looks
+    ///   subtly different without cycling the whole rainbow.
+    private var iridescentTraitView: some View {
+        // Normalise tilt (-15…+20) → 0…1, then map to a pixel sweep across the frame.
+        let tiltNorm    = (tilt - (-15.0)) / 35.0
+        let pixelOffset = (tiltNorm - 0.5) * size
+
+        // Butterfly-wing palette — a ~0.25 hue arc that drifts slowly.
+        // Fades to transparent at the edges so the band has a soft boundary
+        // rather than a hard clip.
+        let base = iridescentHueShift
+        let h1 = base
+        let h2 = (base + 0.10).truncatingRemainder(dividingBy: 1.0)
+        let h3 = (base + 0.22).truncatingRemainder(dividingBy: 1.0)
+
+        // Band is narrower — only occupies the middle 60% of the sweep width,
+        // fading out quickly at both edges so it reads as a glint not a wash.
+        let bandStops: [Gradient.Stop] = [
+            .init(color: Color(hue: h1, saturation: 1.0, brightness: 1.0).opacity(0.0), location: 0.00),
+            .init(color: Color(hue: h1, saturation: 1.0, brightness: 1.0).opacity(0.6), location: 0.30),
+            .init(color: Color(hue: h2, saturation: 1.0, brightness: 1.0).opacity(0.8), location: 0.50),
+            .init(color: Color(hue: h3, saturation: 0.95, brightness: 1.0).opacity(0.6), location: 0.70),
+            .init(color: Color(hue: h3, saturation: 1.0, brightness: 1.0).opacity(0.0), location: 1.00),
+        ]
+
+        let band = LinearGradient(stops: bandStops, startPoint: .leading, endPoint: .trailing)
+            .frame(width: size * 1.5, height: size)   // narrower sheet than before
+            .offset(x: pixelOffset)
+
+        // Very thin specular line — just a subtle glint, not a bright sweep
+        let specular = LinearGradient(
+            stops: [
+                .init(color: .white.opacity(0.00), location: 0.44),
+                .init(color: .white.opacity(0.35), location: 0.50),
+                .init(color: .white.opacity(0.00), location: 0.56),
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+        .frame(width: size * 1.5, height: size)
+        .offset(x: pixelOffset)
+
+        return ZStack {
+
+            // ── Frame only: .hue at low opacity — tints metalwork hue without
+            // touching luminance, so engraving detail is completely preserved.
+            ZStack {
+                band.blendMode(.hue).opacity(0.5)
+                specular.blendMode(.screen).opacity(0.4)
+            }
+            .frame(width: size, height: size)
+            .clipped()
+            .mask(
+                Image(frameAssetName)
+                    .resizable()
+                    .frame(width: size, height: size)
+            )
+        }
+        .onAppear {
+            withAnimation(.linear(duration: 10.0).repeatForever(autoreverses: true)) {
+                iridescentHueShift = 0.22
+            }
+        }
+    }
+
+    private func startChargedAnimation() {
+        withAnimation(.linear(duration: 1.4).repeatForever(autoreverses: false)) {
+            chargedPhase = 1.0
+        }
+    }
+
+    /// Charged — crackling white-blue electric arcs that travel across the gem
+    /// surface in short bursts. Three arcs run at staggered phases so there is
+    /// always at least one visible at a time.
+    private var chargedTraitView: some View {
+        ZStack {
+            // Ambient blue-white tint
+            Image(gemAssetName)
+                .resizable()
+                .frame(width: size, height: size)
+                .colorMultiply(Color(hue: 0.6, saturation: 0.6, brightness: 1.0))
+                .opacity(0.18)
+                .blendMode(.color)
+
+            // Arc 0 — diagonal ~20°, offset up
+            ChargedArcView(phase: chargedPhase, phaseOffset: 0.0,
+                           angle: 20,  yOffset: -size * 0.08, arcWidth: size * 0.9, arcHeight: max(size * 0.014, 2))
+            // Arc 1 — steeper ~85°, centered
+            ChargedArcView(phase: chargedPhase, phaseOffset: 1.0 / 3.0,
+                           angle: 85,  yOffset:  0,            arcWidth: size * 0.9, arcHeight: max(size * 0.014, 2))
+            // Arc 2 — shallow ~150°, offset down
+            ChargedArcView(phase: chargedPhase, phaseOffset: 2.0 / 3.0,
+                           angle: 150, yOffset:  size * 0.08,  arcWidth: size * 0.9, arcHeight: max(size * 0.014, 2))
+        }
+        .mask(
+            Image(gemAssetName)
+                .resizable()
+                .frame(width: size, height: size)
+        )
+    }
+
+    /// Ember — a deep red-orange inner fire that pulses outward, tinting the
+    /// whole gem warm and making it visibly glow.
+    private var emberTraitView: some View {
+        ZStack {
+            // Warm colour tint over the whole gem
+            Image(gemAssetName)
+                .resizable()
+                .frame(width: size, height: size)
+                .colorMultiply(Color(hue: 0.06, saturation: 1.0, brightness: 1.0))
+                .opacity(0.5)
+                .blendMode(.color)
+
+            // Pulsing core fireball
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            Color(hue: 0.08, saturation: 1.0, brightness: 1.0).opacity(emberGlow * 0.9),
+                            Color(hue: 0.04, saturation: 1.0, brightness: 0.9).opacity(emberGlow * 0.5),
+                            Color.clear
+                        ],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: size * 0.38
+                    )
+                )
+                .frame(width: size * 0.76, height: size * 0.76)
+                .blur(radius: size * 0.06)
+                .blendMode(.plusLighter)
+
+            // Outer ember rim — orange halo around the edge
+            Circle()
+                .strokeBorder(
+                    Color(hue: 0.06, saturation: 1.0, brightness: 1.0).opacity(emberGlow * 0.7),
+                    lineWidth: size * 0.06
+                )
+                .frame(width: size * 0.72, height: size * 0.72)
+                .blur(radius: size * 0.04)
+                .blendMode(.plusLighter)
+        }
+        .mask(
+            Image(gemAssetName)
+                .resizable()
+                .frame(width: size, height: size)
+        )
+        .onAppear {
+            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                emberGlow = 1.0
+            }
+        }
+    }
+
     // MARK: - Shimmer & Tilt
 
     @State private var glowPulse: Double = 0.5
@@ -522,6 +919,94 @@ struct FavorGemView: View {
                     endPoint: UnitPoint(x: 0.6, y: 0.6)
                 )
             )
+    }
+}
+
+// MARK: - Rendering a real coin from its DNA
+
+extension SupabaseService.GemDNA {
+    /// Gem tint from the DNA's primary hue and saturation.
+    var gemColor: Color {
+        Color(hue: resolvedHue / 360.0, saturation: resolvedSaturation, brightness: 0.9)
+    }
+
+    /// The gem's own frame color from `identity.frame_hue` (0–360), using the same
+    /// saturation/brightness as the Gem Generator. Nil when the DNA has no frame hue,
+    /// in which case the frame falls back to the tier's default color.
+    var frameColor: Color? {
+        identity?.frameHue.map { Color(hue: $0 / 360.0, saturation: 0.7, brightness: 0.85) }
+    }
+}
+
+extension FavorGemView {
+    /// Renders a real coin exactly as its DNA describes it — family, gem color,
+    /// frame color and trait — at the tier its transfer count has reached.
+    /// Use this for every coin-backed gem so no screen forgets a DNA field.
+    init(
+        dna: SupabaseService.GemDNA?,
+        transferCount: Int,
+        size: CGFloat = 200,
+        showGlow: Bool = false,
+        showShimmer: Bool = false
+    ) {
+        let tier = Tier.from(transferCount: transferCount)
+        self.init(
+            gemFamily: GemFamily.from(dna?.resolvedFamily),
+            tier: tier,
+            gemColor: dna?.gemColor ?? tier.defaultColor,
+            frameColor: dna?.frameColor,
+            size: size,
+            showGlow: showGlow,
+            showShimmer: showShimmer,
+            trait: GemTrait.from(dna?.trait)
+        )
+    }
+}
+
+// MARK: - Charged Arc Helper
+
+/// A single electric arc for the charged trait. Implemented as its own View so
+/// that `phase` is observed as a proper input, guaranteeing SwiftUI redraws on
+/// every animation tick rather than computing visibility once at build time.
+private struct ChargedArcView: View {
+    let phase: Double        // shared 0→1 looping value from the parent's @State
+    let phaseOffset: Double  // staggers this arc within the cycle (0, 1/3, 2/3)
+    let angle: Double        // rotation angle in degrees
+    let yOffset: CGFloat     // perpendicular displacement from center
+    let arcWidth: CGFloat
+    let arcHeight: CGFloat
+
+    /// Local phase for this arc — 0→1 looping, shifted by offset.
+    private var local: Double {
+        (phase + phaseOffset).truncatingRemainder(dividingBy: 1.0)
+    }
+
+    /// Smooth 0→1→0 over the first 35% of the cycle, silent the rest.
+    private var visibility: Double {
+        local < 0.35 ? sin(local / 0.35 * .pi) : 0.0
+    }
+
+    var body: some View {
+        Rectangle()
+            .fill(
+                LinearGradient(
+                    stops: [
+                        .init(color: .clear,                                                   location: 0.00),
+                        .init(color: Color(hue: 0.58, saturation: 0.35, brightness: 1.0),     location: 0.25),
+                        .init(color: .white,                                                   location: 0.50),
+                        .init(color: Color(hue: 0.58, saturation: 0.35, brightness: 1.0),     location: 0.75),
+                        .init(color: .clear,                                                   location: 1.00),
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .frame(width: arcWidth, height: arcHeight)
+            .blur(radius: arcHeight * 0.8)
+            .offset(y: yOffset)
+            .rotationEffect(.degrees(angle))
+            .opacity(visibility)
+            .blendMode(.plusLighter)
     }
 }
 
@@ -1089,6 +1574,68 @@ struct FrameAssetVerificationView: View {
     }
 }
 
+#Preview("Trait: None") {
+    ZStack {
+        Color.black.ignoresSafeArea()
+        VStack(spacing: 12) {
+            FavorGemView(gemFamily: .lightning, tier: .bloom, gemColor: .cyan,
+                         size: 260, showGlow: true, showShimmer: false, trait: nil)
+            Text("None").font(.headline).foregroundColor(.white.opacity(0.4))
+        }
+    }
+}
 
+#Preview("Trait: Starlight") {
+    ZStack {
+        Color.black.ignoresSafeArea()
+        VStack(spacing: 12) {
+            FavorGemView(gemFamily: .lightning, tier: .bloom, gemColor: .cyan,
+                         size: 260, showGlow: true, showShimmer: false, trait: .starlight)
+            Text("Starlight").font(.headline).foregroundColor(.white)
+        }
+    }
+}
 
+#Preview("Trait: Rainbow") {
+    ZStack {
+        Color.black.ignoresSafeArea()
+        VStack(spacing: 12) {
+            FavorGemView(gemFamily: .lightning, tier: .bloom, gemColor: .cyan,
+                         size: 260, showGlow: true, showShimmer: false, trait: .rainbow)
+            Text("Rainbow").font(.headline).foregroundColor(.white)
+        }
+    }
+}
 
+#Preview("Trait: Iridescent") {
+    ZStack {
+        Color.black.ignoresSafeArea()
+        VStack(spacing: 12) {
+            FavorGemView(gemFamily: .lightning, tier: .bloom, gemColor: .cyan,
+                         size: 260, showGlow: true, showShimmer: false, trait: .iridescent)
+            Text("Iridescent").font(.headline).foregroundColor(.white)
+        }
+    }
+}
+
+#Preview("Trait: Charged") {
+    ZStack {
+        Color.black.ignoresSafeArea()
+        VStack(spacing: 12) {
+            FavorGemView(gemFamily: .lightning, tier: .bloom, gemColor: .cyan,
+                         size: 260, showGlow: true, showShimmer: false, trait: .charged)
+            Text("Charged").font(.headline).foregroundColor(.white)
+        }
+    }
+}
+
+#Preview("Trait: Ember") {
+    ZStack {
+        Color.black.ignoresSafeArea()
+        VStack(spacing: 12) {
+            FavorGemView(gemFamily: .lightning, tier: .bloom, gemColor: .cyan,
+                         size: 260, showGlow: true, showShimmer: false, trait: .ember)
+            Text("Ember").font(.headline).foregroundColor(.white)
+        }
+    }
+}

@@ -8,11 +8,43 @@
 
 import SwiftUI
 
+// MARK: - Stats model
+
+@Observable
+final class ProfileStatsModel {
+    var gemsHeld: Int?
+    var originals: Int?
+    var favors: Int?
+
+    /// Loads the three counts in parallel. Each is optional: a failed fetch shows "–"
+    /// rather than blocking the others.
+    @MainActor
+    func load(userId: UUID?) async {
+        guard let userId else { return }
+        let service = SupabaseService.shared
+        async let held      = try? service.myFavors(userId: userId)
+        async let created   = try? service.myOriginals(userId: userId)
+        async let incoming  = try? service.myIncomingFavors(userId: userId)
+        async let outgoing  = try? service.myOutgoingFavors(userId: userId)
+
+        gemsHeld  = await held?.count
+        originals = await created?.count
+
+        // Favors that finished with a gem, in either direction
+        let inDone  = await incoming?.filter(\.isTransferred)
+        let outDone = await outgoing?.filter(\.isTransferred)
+        if inDone != nil || outDone != nil {
+            favors = Set(((inDone ?? []) + (outDone ?? [])).map(\.id)).count
+        }
+    }
+}
+
 struct ProfileTabView: View {
     @Environment(AppViewModel.self) private var appVM
     @Environment(AuthViewModel.self) private var authVM
 
     @State private var showSignOutConfirm = false
+    @State private var stats = ProfileStatsModel()
 
     var body: some View {
         NavigationStack {
@@ -47,8 +79,11 @@ struct ProfileTabView: View {
                             .padding(.bottom, 40)
                     }
                 }
+                .refreshable { await stats.load(userId: appVM.userId) }
             }
             .navigationBarHidden(true)
+            // Re-runs whenever the tab appears, so counts reflect gems just given or received
+            .task { await stats.load(userId: appVM.userId) }
             .confirmationDialog(
                 "Sign out of Favorium?",
                 isPresented: $showSignOutConfirm,
@@ -70,7 +105,7 @@ struct ProfileTabView: View {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [FavoriumTheme.teal.opacity(0.4), FavoriumTheme.tealMuted.opacity(0.2)],
+                            colors: [FavoriumTheme.accent.opacity(0.4), FavoriumTheme.accentMuted.opacity(0.2)],
                             startPoint: .topLeading, endPoint: .bottomTrailing
                         )
                     )
@@ -81,13 +116,26 @@ struct ProfileTabView: View {
                     .foregroundColor(FavoriumTheme.ivory)
             }
             .overlay(
-                Circle().stroke(FavoriumTheme.teal.opacity(0.3), lineWidth: 1.5)
+                Circle().stroke(FavoriumTheme.accent.opacity(0.3), lineWidth: 1.5)
             )
-            .shadow(color: FavoriumTheme.teal.opacity(0.25), radius: 16)
+            .shadow(color: FavoriumTheme.accent.opacity(0.25), radius: 16)
 
-            Text(appVM.displayName.isEmpty ? "Your name" : appVM.displayName)
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundColor(FavoriumTheme.ivory)
+            VStack(spacing: 4) {
+                Text(appVM.displayName.isEmpty ? "Your name" : appVM.displayName)
+                    .font(.system(size: 22, weight: .semibold, design: .serif))
+                    .foregroundColor(FavoriumTheme.ivory)
+                    .multilineTextAlignment(.center)
+
+                if !appVM.email.isEmpty {
+                    Label(appVM.email, systemImage: "envelope")
+                        .font(FavoriumTheme.captionFont)
+                        .foregroundColor(FavoriumTheme.ivoryDim)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .textSelection(.enabled)
+                }
+            }
+            .accessibilityElement(children: .combine)
         }
     }
 
@@ -95,35 +143,43 @@ struct ProfileTabView: View {
 
     private var statsRow: some View {
         HStack(spacing: 0) {
-            statCell(label: "Gems held", icon: "diamond")
+            statCell(value: stats.gemsHeld, label: "Gems held", icon: "diamond")
             Divider()
-                .background(FavoriumTheme.tealMuted.opacity(0.3))
+                .background(FavoriumTheme.accentMuted.opacity(0.3))
                 .frame(height: 40)
-            statCell(label: "Originals", icon: "star")
+            statCell(value: stats.originals, label: "Originals", icon: "star")
             Divider()
-                .background(FavoriumTheme.tealMuted.opacity(0.3))
+                .background(FavoriumTheme.accentMuted.opacity(0.3))
                 .frame(height: 40)
-            statCell(label: "Favors", icon: "heart")
+            statCell(value: stats.favors, label: "Favors", icon: "heart")
         }
         .padding(.vertical, 16)
         .background(FavoriumTheme.surface)
         .clipShape(RoundedRectangle(cornerRadius: FavoriumTheme.cardRadius))
         .overlay(
             RoundedRectangle(cornerRadius: FavoriumTheme.cardRadius)
-                .stroke(FavoriumTheme.tealMuted.opacity(0.2), lineWidth: 1)
+                .stroke(FavoriumTheme.accentMuted.opacity(0.2), lineWidth: 1)
         )
     }
 
-    private func statCell(label: String, icon: String) -> some View {
+    private func statCell(value: Int?, label: String, icon: String) -> some View {
         VStack(spacing: 4) {
             Image(systemName: icon)
-                .font(.system(size: 18, weight: .light))
-                .foregroundColor(FavoriumTheme.teal)
+                .font(.system(size: 16, weight: .light))
+                .foregroundColor(FavoriumTheme.accent)
+            // "–" until loaded (or if that count couldn't be fetched)
+            Text(value.map(String.init) ?? "–")
+                .font(.system(size: 22, weight: .bold, design: .serif))
+                .foregroundColor(FavoriumTheme.ivory)
+                .contentTransition(.numericText())
+                .animation(.easeOut(duration: 0.3), value: value)
             Text(label)
                 .font(.system(size: 12))
                 .foregroundColor(FavoriumTheme.ivoryDim)
         }
         .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(label): \(value.map(String.init) ?? "loading")")
     }
 
     // MARK: - Settings
@@ -139,7 +195,7 @@ struct ProfileTabView: View {
         .clipShape(RoundedRectangle(cornerRadius: FavoriumTheme.cardRadius))
         .overlay(
             RoundedRectangle(cornerRadius: FavoriumTheme.cardRadius)
-                .stroke(FavoriumTheme.tealMuted.opacity(0.2), lineWidth: 1)
+                .stroke(FavoriumTheme.accentMuted.opacity(0.2), lineWidth: 1)
         )
     }
 
@@ -147,7 +203,7 @@ struct ProfileTabView: View {
         HStack(spacing: 14) {
             Image(systemName: icon)
                 .font(.system(size: 16))
-                .foregroundColor(FavoriumTheme.teal)
+                .foregroundColor(FavoriumTheme.accent)
                 .frame(width: 24)
             Text(label)
                 .font(FavoriumTheme.bodyFont)

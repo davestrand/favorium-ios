@@ -329,7 +329,7 @@ struct MagicalGemCore: View {
     }
     
     private var sparkles: some View {
-        ForEach(0..<sparkleCount) { i in
+        ForEach(0..<sparkleCount, id: \.self) { i in
             Circle()
                 .fill(
                     RadialGradient(
@@ -1106,8 +1106,7 @@ struct PlasmaEffect: View {
                     // Rotation for organic feel
                     let rotation = blobTime * 0.8 + seed
                     
-                    // Color shifting between primary and secondary with extra hue shift
-                    let colorMix = (sin(blobTime * 0.8 + seed) + 1.0) / 2.0
+                    // Extra hue shift per blob
                     let hueShift = (time * 20 + Double(blob) * 30).truncatingRemainder(dividingBy: 360)
                     let blobColor = Color(hue: hueShift / 360.0, saturation: 0.9, brightness: 1.0)
                     
@@ -1740,10 +1739,6 @@ struct AuroraEffect: View {
                             path.addLine(to: CGPoint(x: x, y: y))
                         }
                     }
-                    
-                    // Color gradient between primary and secondary
-                    let sinValue = sin(time * 0.5 + waveDouble * 0.5)
-                    let colorMix = (sinValue + 1.0) / 2.0
                     
                     // Create interpolated color by mixing hues
                     // Use a simpler approach that doesn't rely on CGColor components

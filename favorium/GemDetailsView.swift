@@ -22,12 +22,22 @@ final class GemDetailViewModel {
     // Controls whether the "earlier exchanges" collapsed block is expanded
     var earlierExpanded: Bool = false
 
+    /// True when a completed favor is waiting for a gem — only then is "Send this gem" offered
+    var hasFavorsAwaitingGem: Bool = false
+
     @MainActor
-    func load(coinId: UUID) async {
+    func load(coinId: UUID, userId: UUID?) async {
         loadState = .loading
         do {
+            // Optional: if this fails the send button simply stays hidden
+            async let incomingTask: [SupabaseService.Favor]? = {
+                guard let userId else { return nil }
+                return try? await SupabaseService.shared.myIncomingFavors(userId: userId)
+            }()
             let result = try await SupabaseService.shared.coinJourney(coinID: coinId)
             journey = result
+            // Filter on the main actor (Favor's status helpers are main-actor isolated)
+            hasFavorsAwaitingGem = ((await incomingTask) ?? []).contains { $0.isCompleted && $0.coin_id == nil }
             loadState = .loaded
         } catch is CancellationError {
             if case .loading = loadState { loadState = .idle }
@@ -53,7 +63,7 @@ struct GemDetailView: View {
         VStack(spacing: 0) {
             navBar
             Divider()
-                .background(FavoriumTheme.tealMuted.opacity(0.3))
+                .background(FavoriumTheme.accentMuted.opacity(0.3))
 
             ZStack {
                 FavoriumTheme.background.ignoresSafeArea()
@@ -71,16 +81,15 @@ struct GemDetailView: View {
             }
         }
         .background(FavoriumTheme.background.ignoresSafeArea())
-        .task { await vm.load(coinId: coinId) }
+        .task { await vm.load(coinId: coinId, userId: userId) }
         .sheet(isPresented: $showSend) {
             if let j = vm.journey {
                 SendGemView(
-                    coinId: coinId,
-                    coinName: j.name,
-                    transferCount: j.transferCount,
+                    initialGem: GiftableGem(id: coinId, name: j.name,
+                                            transferCount: j.transferCount, dna: j.dna),
                     userId: userId
                 ) {
-                    Task { await vm.load(coinId: coinId) }
+                    Task { await vm.load(coinId: coinId, userId: userId) }
                 }
             }
         }
@@ -101,8 +110,8 @@ struct GemDetailView: View {
                     .padding(.horizontal, 24)
                     .padding(.bottom, 20)
 
-                // ── Send button (only when user is current owner) ─────────
-                if j.isOwner == true {
+                // ── Send button (owner, with a completed favor awaiting a gem) ─
+                if j.isOwner == true && vm.hasFavorsAwaitingGem {
                     sendButton
                         .padding(.horizontal, 24)
                         .padding(.bottom, 28)
@@ -164,15 +173,12 @@ struct GemDetailView: View {
         let hue       = j.dna?.resolvedHue ?? 45
         let sat       = j.dna?.resolvedSaturation ?? 0.7
         let glowColor = Color(hue: hue / 360.0, saturation: sat, brightness: 0.9)
-        let family    = GemFamily.from(j.dna?.resolvedFamily)
-        let tier      = Tier.from(transferCount: j.transferCount)
         let gemSize: CGFloat = 280
 
-        // Gem — same call as the generator: FavorGemView with glow + shimmer
+        // Gem — rendered straight from its DNA (family, gem + frame color, trait)
         return FavorGemView(
-            gemFamily: family,
-            tier: tier,
-            gemColor: glowColor,
+            dna: j.dna,
+            transferCount: j.transferCount,
             size: gemSize,
             showGlow: true,
             showShimmer: true
@@ -250,18 +256,36 @@ struct GemDetailView: View {
             .font(.system(size: 13))
             .foregroundColor(tier.defaultColor)
 
-            // Trait badge — appears at Bloom tier
-            if let trait = j.dna?.trait {
-                Text(trait.capitalized)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(FavoriumTheme.teal)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 4)
-                    .background(FavoriumTheme.teal.opacity(0.12))
-                    .clipShape(Capsule())
+            // Trait label + description — revealed only once the gem reaches Bloom
+            if tier != .seed, let trait = GemTrait.from(j.dna?.trait) {
+                traitCard(trait)
+                    .padding(.top, 6)
             }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private func traitCard(_ trait: GemTrait) -> some View {
+        VStack(spacing: 6) {
+            Label(trait.displayName, systemImage: "sparkles")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(FavoriumTheme.accent)
+            Text(trait.description)
+                .font(FavoriumTheme.captionFont)
+                .foregroundColor(FavoriumTheme.ivoryDim)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity)
+        .background(FavoriumTheme.accent.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: FavoriumTheme.rowRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: FavoriumTheme.rowRadius)
+                .stroke(FavoriumTheme.accent.opacity(0.25), lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
     }
 
     private func holderLabel(_ j: SupabaseService.CoinJourneyPayload) -> String {
@@ -282,11 +306,9 @@ struct GemDetailView: View {
                 Text("Send this gem")
                     .fontWeight(.semibold)
             }
-            .foregroundColor(.black)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(FavoriumTheme.teal)
-            .clipShape(Capsule())
+            .metallicGoldCapsule()
         }
     }
 
@@ -310,7 +332,7 @@ struct GemDetailView: View {
                 Spacer()
                 Image(systemName: "sparkle")
                     .font(.system(size: 12))
-                    .foregroundColor(FavoriumTheme.tealMuted)
+                    .foregroundColor(FavoriumTheme.accentMuted)
                 Spacer()
             }
             .padding(.bottom, 16)
@@ -372,12 +394,12 @@ struct GemDetailView: View {
             // Timeline spine
             VStack(spacing: 0) {
                 Circle()
-                    .fill(FavoriumTheme.teal)
+                    .fill(FavoriumTheme.accent)
                     .frame(width: 10, height: 10)
                     .padding(.top, 4)
                 if !isLast {
                     Rectangle()
-                        .fill(FavoriumTheme.tealMuted.opacity(0.35))
+                        .fill(FavoriumTheme.accentMuted.opacity(0.35))
                         .frame(width: 2)
                         .frame(maxHeight: .infinity)
                 }
@@ -443,11 +465,11 @@ struct GemDetailView: View {
                             .frame(width: 20, height: 20)
                         Image(systemName: "ellipsis")
                             .font(.system(size: 8, weight: .bold))
-                            .foregroundColor(FavoriumTheme.tealMuted)
+                            .foregroundColor(FavoriumTheme.accentMuted)
                     }
                     .padding(.top, 4)
                     Rectangle()
-                        .fill(FavoriumTheme.tealMuted.opacity(0.35))
+                        .fill(FavoriumTheme.accentMuted.opacity(0.35))
                         .frame(width: 2)
                         .frame(maxHeight: .infinity)
                 }
@@ -456,11 +478,11 @@ struct GemDetailView: View {
                 HStack {
                     Text(vm.earlierExpanded ? "Collapse earlier exchanges" : "\(count) earlier exchanges")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(FavoriumTheme.teal)
+                        .foregroundColor(FavoriumTheme.accent)
                     Spacer()
                     Image(systemName: vm.earlierExpanded ? "chevron.up" : "chevron.right")
                         .font(.system(size: 12))
-                        .foregroundColor(FavoriumTheme.teal)
+                        .foregroundColor(FavoriumTheme.accent)
                 }
                 .padding(.bottom, 20)
             }
@@ -474,7 +496,7 @@ struct GemDetailView: View {
         VStack {
             Spacer()
             ProgressView()
-                .tint(FavoriumTheme.teal)
+                .tint(FavoriumTheme.accent)
                 .scaleEffect(1.4)
             Spacer()
         }
@@ -493,9 +515,9 @@ struct GemDetailView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
             Button("Try again") {
-                Task { await vm.load(coinId: coinId) }
+                Task { await vm.load(coinId: coinId, userId: userId) }
             }
-            .foregroundColor(FavoriumTheme.teal)
+            .foregroundColor(FavoriumTheme.accent)
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -14,7 +14,6 @@ struct CollectionView: View {
     @State private var vm = CollectionViewModel()
     @State private var selectedCoin: SupabaseService.CoinSummary?
     @State private var showSendPicker = false
-    @State private var sendGem: SupabaseService.CoinSummary?
 
     private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
 
@@ -37,8 +36,8 @@ struct CollectionView: View {
                             .padding(.bottom, 28)
                             .frame(maxWidth: .infinity)
 
-                        // ── Send a gem CTA (only when user holds gems) ───
-                        if !vm.held.isEmpty {
+                        // ── Give a gem CTA (only when a completed favor is waiting for one) ───
+                        if !vm.held.isEmpty && !vm.favorsAwaitingGem.isEmpty {
                             sendCTAButton
                                 .padding(.horizontal, 16)
                                 .padding(.bottom, 32)
@@ -67,21 +66,6 @@ struct CollectionView: View {
             .sheet(item: $selectedCoin) { coin in
                 GemDetailView(coinId: coin.id, coinName: coin.name ?? "Gem", userId: appVM.userId)
             }
-            .sheet(item: $sendGem) { gem in
-                SendGemView(
-                    coinId: gem.id,
-                    coinName: gem.name ?? "Gem",
-                    transferCount: gem.transfer_count ?? 0,
-                    userId: appVM.userId
-                ) {
-                    // Refresh after a successful send
-                    Task {
-                        if let uid = appVM.userId {
-                            await vm.load(userId: uid)
-                        }
-                    }
-                }
-            }
         }
     }
 
@@ -96,7 +80,7 @@ struct CollectionView: View {
                     Ellipse()
                         .fill(
                             RadialGradient(
-                                colors: [FavoriumTheme.teal.opacity(0.08), .clear],
+                                colors: [FavoriumTheme.accent.opacity(0.08), .clear],
                                 center: .center, startRadius: 5, endRadius: 180
                             )
                         )
@@ -132,7 +116,7 @@ struct CollectionView: View {
             let label = readyCount == 1 ? "1 gem ready to give" : "\(readyCount) gems ready to give"
             Text(label)
                 .font(FavoriumTheme.captionFont)
-                .foregroundColor(FavoriumTheme.teal)
+                .foregroundColor(FavoriumTheme.accent)
         default:
             Text("Your collection")
                 .font(FavoriumTheme.captionFont)
@@ -164,6 +148,7 @@ struct CollectionView: View {
                             GemGridCell(
                                 coin: coin,
                                 isOriginal: coin.creator_id == appVM.userId,
+                                story: vm.storyByCoin[coin.id],
                                 onTap: { selectedCoin = coin }
                             )
                             .transition(.scale(scale: 0.92).combined(with: .opacity))
@@ -189,7 +174,7 @@ struct CollectionView: View {
         VStack(spacing: 10) {
             Image(systemName: "diamond")
                 .font(.system(size: 36, weight: .ultraLight))
-                .foregroundColor(FavoriumTheme.tealMuted)
+                .foregroundColor(FavoriumTheme.accentMuted)
             Text("No gems yet")
                 .font(FavoriumTheme.bodyFont)
                 .foregroundColor(FavoriumTheme.ivoryDim)
@@ -200,28 +185,40 @@ struct CollectionView: View {
 
     // MARK: - Send CTA
 
+    /// Names the helper when there's exactly one favor to thank, otherwise counts them.
+    private var sendCTALabel: String {
+        let awaiting = vm.favorsAwaitingGem
+        if awaiting.count == 1 {
+            return "Thank \(awaiting[0].helper_name ?? "your helper") with a gem"
+        }
+        return "Give a gem · \(awaiting.count) favors"
+    }
+
     private var sendCTAButton: some View {
         Button {
-            // Open a picker sheet to choose which gem to send
+            // The give-a-gem sheet lets the user pick both the gem and the favor
             showSendPicker = true
         } label: {
             HStack {
-                Image(systemName: "paperplane")
-                Text("Send a gem")
+                Image(systemName: "gift")
+                Text(sendCTALabel)
                     .fontWeight(.semibold)
+                    .lineLimit(1)
                 Spacer()
                 Image(systemName: "chevron.right")
             }
-            .foregroundColor(.black)
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
-            .background(FavoriumTheme.teal)
-            .clipShape(Capsule())
+            .metallicGoldCapsule()
         }
         .sheet(isPresented: $showSendPicker) {
-            GemPickerForSendView(coins: vm.held) { chosen in
-                sendGem = chosen
-                showSendPicker = false
+            SendGemView(userId: appVM.userId) {
+                // Refresh after a gem is given
+                Task {
+                    if let uid = appVM.userId {
+                        await vm.load(userId: uid)
+                    }
+                }
             }
         }
     }
@@ -273,16 +270,13 @@ struct CollectionView: View {
 private struct GemGridCell: View {
     let coin: SupabaseService.CoinSummary
     let isOriginal: Bool
+    /// The favor that brought this gem to the user, or nil if it has no story yet
+    let story: SupabaseService.Favor?
     let onTap: () -> Void
 
     private var transferCount: Int { coin.transfer_count ?? 0 }
     private var tier: Tier { Tier.from(transferCount: transferCount) }
     private var resolvedDNA: SupabaseService.GemDNA? { coin.gemDNA }
-    private var gemFamily: GemFamily { GemFamily.from(resolvedDNA?.resolvedFamily) }
-    private var gemColor: Color {
-        guard let dna = resolvedDNA else { return tier.defaultColor }
-        return Color(hue: dna.resolvedHue / 360.0, saturation: dna.resolvedSaturation, brightness: 0.9)
-    }
 
     var body: some View {
         Button(action: onTap) {
@@ -291,16 +285,28 @@ private struct GemGridCell: View {
                     // Gem — asset-based renderer
                     Group {
                         FavorGemView(
-                            gemFamily: gemFamily,
-                            tier: tier,
-                            gemColor: gemColor,
+                            dna: resolvedDNA,
+                            transferCount: transferCount,
                             size: 110,
-                            showGlow: true,
-                            showShimmer: false
+                            showGlow: true
                         )
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
+
+                    // Trait badge — revealed from Bloom onward
+                    if tier != .seed, let trait = GemTrait.from(resolvedDNA?.trait) {
+                        Text(trait.displayName)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(FavoriumTheme.accent)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(FavoriumTheme.surface.opacity(0.9))
+                            .clipShape(Capsule())
+                            .overlay(Capsule().stroke(FavoriumTheme.accent.opacity(0.3), lineWidth: 1))
+                            .padding(8)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                    }
 
                     // Original indicator dot
                     if isOriginal {
@@ -314,34 +320,16 @@ private struct GemGridCell: View {
                     }
                 }
 
-                Divider().background(FavoriumTheme.tealMuted.opacity(0.3))
+                Divider().background(FavoriumTheme.accentMuted.opacity(0.3))
 
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(coin.name ?? "Gem")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(FavoriumTheme.ivory)
-                            .lineLimit(1)
-                        HStack(spacing: 4) {
-                            Text("\(gemFamily.displayName) · \(tier.displayName)")
-                                .font(.system(size: 11))
-                                .foregroundColor(FavoriumTheme.ivoryDim)
-                            if let trait = resolvedDNA?.trait {
-                                Text(trait.capitalized)
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundColor(FavoriumTheme.teal)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(FavoriumTheme.teal.opacity(0.12))
-                                    .clipShape(Capsule())
-                            }
-                        }
-                    }
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(FavoriumTheme.ivoryDim)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(coin.name ?? "Gem")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(FavoriumTheme.ivory)
+                        .lineLimit(1)
+                    storyText
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
             }
@@ -349,10 +337,51 @@ private struct GemGridCell: View {
             .clipShape(RoundedRectangle(cornerRadius: FavoriumTheme.cardRadius))
             .overlay(
                 RoundedRectangle(cornerRadius: FavoriumTheme.cardRadius)
-                    .stroke(FavoriumTheme.tealMuted.opacity(0.25), lineWidth: 1)
+                    .stroke(FavoriumTheme.accentMuted.opacity(0.25), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: - Story
+
+    /// The favor this gem remembers, or a gentle note that it has none yet.
+    /// Always two-plus-one lines tall so cards in the grid line up.
+    @ViewBuilder
+    private var storyText: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            if let story {
+                Text("\u{201C}\(story.description)\u{201D}")
+                    .font(.system(size: 12, design: .serif))
+                    .italic()
+                    .foregroundColor(FavoriumTheme.ivory.opacity(0.85))
+                    .lineLimit(2, reservesSpace: true)
+                Text(storyCaption(story))
+                    .font(.system(size: 11))
+                    .foregroundColor(FavoriumTheme.ivoryDim)
+                    .lineLimit(1)
+            } else {
+                Text("No story yet")
+                    .font(.system(size: 12, design: .serif))
+                    .italic()
+                    .foregroundColor(FavoriumTheme.ivoryDim)
+                    .lineLimit(2, reservesSpace: true)
+                Text("Waiting for its first favor")
+                    .font(.system(size: 11))
+                    .foregroundColor(FavoriumTheme.accentMuted)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    /// "for Sam · Oct 19"
+    private func storyCaption(_ favor: SupabaseService.Favor) -> String {
+        let who = "for \(favor.helped_name ?? "someone")"
+        let raw = favor.transferred_at ?? favor.completed_at ?? favor.created_at
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = iso.date(from: raw) ?? ISO8601DateFormatter().date(from: raw) else { return who }
+        return "\(who) · \(date.formatted(.dateTime.month(.abbreviated).day()))"
     }
 }
 
@@ -366,22 +395,14 @@ private struct OriginalGemRow: View {
     private var transferCount: Int { coin.transfer_count ?? 0 }
     private var tier: Tier { Tier.from(transferCount: transferCount) }
     private var resolvedDNA: SupabaseService.GemDNA? { coin.gemDNA }
-    private var gemFamily: GemFamily { GemFamily.from(resolvedDNA?.resolvedFamily) }
-    private var gemColor: Color {
-        guard let dna = resolvedDNA else { return tier.defaultColor }
-        return Color(hue: dna.resolvedHue / 360.0, saturation: dna.resolvedSaturation, brightness: 0.9)
-    }
 
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 14) {
                 FavorGemView(
-                    gemFamily: gemFamily,
-                    tier: tier,
-                    gemColor: gemColor,
-                    size: 54,
-                    showGlow: false,
-                    showShimmer: false
+                    dna: resolvedDNA,
+                    transferCount: transferCount,
+                    size: 54
                 )
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -392,13 +413,13 @@ private struct OriginalGemRow: View {
                         Text(holderSubtitle)
                             .font(FavoriumTheme.captionFont)
                             .foregroundColor(FavoriumTheme.ivoryDim)
-                        if let trait = resolvedDNA?.trait {
-                            Text(trait.capitalized)
+                        if tier != .seed, let trait = GemTrait.from(resolvedDNA?.trait) {
+                            Text(trait.displayName)
                                 .font(.system(size: 10, weight: .semibold))
-                                .foregroundColor(FavoriumTheme.teal)
+                                .foregroundColor(FavoriumTheme.accent)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(FavoriumTheme.teal.opacity(0.12))
+                                .background(FavoriumTheme.accent.opacity(0.12))
                                 .clipShape(Capsule())
                         }
                     }
@@ -420,7 +441,7 @@ private struct OriginalGemRow: View {
             .clipShape(RoundedRectangle(cornerRadius: FavoriumTheme.rowRadius))
             .overlay(
                 RoundedRectangle(cornerRadius: FavoriumTheme.rowRadius)
-                    .stroke(FavoriumTheme.tealMuted.opacity(0.2), lineWidth: 1)
+                    .stroke(FavoriumTheme.accentMuted.opacity(0.2), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -444,66 +465,6 @@ private struct OriginalGemRow: View {
     }
 }
 
-// MARK: - Gem Picker Sheet (for Send CTA)
-
-private struct GemPickerForSendView: View {
-    let coins: [SupabaseService.CoinSummary]
-    let onSelect: (SupabaseService.CoinSummary) -> Void
-
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                FavoriumTheme.background.ignoresSafeArea()
-                List(coins) { coin in
-                    Button {
-                        onSelect(coin)
-                        dismiss()
-                    } label: {
-                        HStack(spacing: 14) {
-                            let tier = Tier.from(transferCount: coin.transfer_count ?? 0)
-                            let dna  = coin.gemDNA
-                            let family = GemFamily.from(dna?.resolvedFamily)
-                            let gemColor = dna.map {
-                                Color(hue: $0.resolvedHue / 360.0, saturation: $0.resolvedSaturation, brightness: 0.9)
-                            } ?? tier.defaultColor
-                            FavorGemView(
-                                gemFamily: family,
-                                tier: tier,
-                                gemColor: gemColor,
-                                size: 46,
-                                showGlow: false,
-                                showShimmer: false
-                            )
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(coin.name ?? "Gem")
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundColor(FavoriumTheme.ivory)
-                                Text(tier.displayName)
-                                    .font(FavoriumTheme.captionFont)
-                                    .foregroundColor(FavoriumTheme.ivoryDim)
-                            }
-                        }
-                    }
-                    .listRowBackground(FavoriumTheme.surface)
-                }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
-            }
-            .navigationTitle("Choose a gem")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                        .foregroundColor(FavoriumTheme.teal)
-                }
-            }
-        }
-        .preferredColorScheme(.dark)
-    }
-}
-
 // MARK: - Shared reusable subviews
 
 struct SectionHeader: View {
@@ -518,10 +479,10 @@ struct SectionHeader: View {
             if let count {
                 Text("\(count)")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(FavoriumTheme.teal)
+                    .foregroundColor(FavoriumTheme.accent)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 2)
-                    .background(FavoriumTheme.teal.opacity(0.15))
+                    .background(FavoriumTheme.accent.opacity(0.15))
                     .clipShape(Capsule())
             }
         }

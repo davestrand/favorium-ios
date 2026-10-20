@@ -5,6 +5,13 @@
 //  "Favors" tab — pending (incoming + outgoing) above completed history.
 //  Uses SupabaseService exclusively; no new statuses or lifecycle invented.
 //
+//  Favor lifecycle (enforced server-side):
+//    helper:  propose_favor            → proposed
+//    helped:  respond_to_favor         → accepted / declined
+//    helped:  complete_favor           → completed
+//    helped:  transfer_coin (gives gem)→ transferred
+//  Only the *helped* person can act after the proposal; the helper just waits.
+//
 
 import SwiftUI
 
@@ -22,24 +29,41 @@ final class FavorsViewModel {
 
     // Action-in-flight tracking (favorId → true while network call is pending)
     var actingOn: Set<UUID> = []
+    /// Last failed action, shown as a banner instead of failing silently
+    var actionError: String?
 
     // MARK: - Derived
 
-    /// Pending: proposed incoming (needs my reply) + accepted outgoing (in progress)
-    var pendingIncoming: [SupabaseService.Favor] {
+    /// Someone offered to help me — I need to accept or decline
+    var offersToMe: [SupabaseService.Favor] {
         incoming.filter { $0.isProposed }
     }
 
-    var pendingOutgoing: [SupabaseService.Favor] {
-        outgoing.filter { $0.isAccepted }
+    /// Someone is helping me — I confirm when it's done
+    var helpingMe: [SupabaseService.Favor] {
+        incoming.filter { $0.isAccepted }
     }
 
-    var hasPending: Bool { !pendingIncoming.isEmpty || !pendingOutgoing.isEmpty }
+    /// Done and confirmed — I still owe the helper a gem
+    var awaitingMyGem: [SupabaseService.Favor] {
+        incoming.filter { $0.isCompleted && $0.coin_id == nil }
+    }
 
-    /// Completed history filtered per picker
+    /// Favors I'm doing for others — nothing for me to do but wait
+    var myOffersInFlight: [SupabaseService.Favor] {
+        outgoing.filter { $0.isProposed || $0.isAccepted || ($0.isCompleted && $0.coin_id == nil) }
+    }
+
+    var pendingCount: Int {
+        offersToMe.count + helpingMe.count + awaitingMyGem.count + myOffersInFlight.count
+    }
+
+    var hasPending: Bool { pendingCount > 0 }
+
+    /// Finished favors (gem given, declined or cancelled) filtered per picker
     var historyItems: [SupabaseService.Favor] {
         let completed = (incoming + outgoing)
-            .filter { $0.isCompleted || $0.isTransferred || $0.isDeclined || $0.isCancelled }
+            .filter { $0.isTransferred || $0.isDeclined || $0.isCancelled }
 
         switch historyFilter {
         case .all:
@@ -50,15 +74,15 @@ final class FavorsViewModel {
                 .filter { seen.insert($0.id).inserted }
 
         case .given:
-            // Favors the user performed — outgoing that completed
+            // Favors the user performed and was thanked for
             return outgoing
-                .filter { $0.isCompleted || $0.isTransferred }
+                .filter { $0.isTransferred }
                 .sorted { $0.created_at > $1.created_at }
 
         case .received:
-            // Favors the user received — incoming that completed
+            // Favors the user received and gave a gem for
             return incoming
-                .filter { $0.isCompleted || $0.isTransferred }
+                .filter { $0.isTransferred }
                 .sorted { $0.created_at > $1.created_at }
         }
     }
@@ -67,7 +91,12 @@ final class FavorsViewModel {
 
     @MainActor
     func load(userId: UUID) async {
-        loadState = .loading
+        // Only show placeholders on the first load. Swapping loaded cards for
+        // placeholders during pull-to-refresh shrinks the scroll content, which
+        // makes SwiftUI cancel the refresh task mid-request.
+        if loadState != .loaded {
+            loadState = .loading
+        }
         do {
             async let inTask  = SupabaseService.shared.myIncomingFavors(userId: userId)
             async let outTask = SupabaseService.shared.myOutgoingFavors(userId: userId)
@@ -76,41 +105,66 @@ final class FavorsViewModel {
             incoming = i
             outgoing = o
             loadState = .loaded
+        } catch where Self.isCancellation(error) {
+            // A cancelled refresh isn't a failure. Keep whatever is on screen,
+            // and let the next .task / refresh retry a first load that was interrupted.
+            if loadState == .loading { loadState = .idle }
         } catch {
             loadState = .failed(error.localizedDescription)
         }
+    }
+
+    /// Task cancellation can surface as Swift's CancellationError or, from the
+    /// networking layer underneath Supabase, as URLError(.cancelled).
+    private static func isCancellation(_ error: Error) -> Bool {
+        error is CancellationError || (error as? URLError)?.code == .cancelled
     }
 
     // MARK: - Actions
 
     @MainActor
     func accept(_ favor: SupabaseService.Favor, userId: UUID) async {
-        actingOn.insert(favor.id)
-        defer { actingOn.remove(favor.id) }
-        do {
+        await perform(on: favor, userId: userId) {
             try await SupabaseService.shared.acceptFavor(favorId: favor.id)
-            await load(userId: userId)
-        } catch { /* surface error if needed */ }
+        }
     }
 
     @MainActor
     func decline(_ favor: SupabaseService.Favor, userId: UUID) async {
-        actingOn.insert(favor.id)
-        defer { actingOn.remove(favor.id) }
-        do {
+        await perform(on: favor, userId: userId) {
             try await SupabaseService.shared.declineFavor(favorId: favor.id)
-            await load(userId: userId)
-        } catch { }
+        }
     }
 
+    /// Helped person confirms the favor is done (complete_favor)
     @MainActor
     func complete(_ favor: SupabaseService.Favor, userId: UUID) async {
+        await perform(on: favor, userId: userId) {
+            try await SupabaseService.shared.completeFavor(favorId: favor.id)
+        }
+    }
+
+    /// Either person cancels a favor that's still proposed or accepted (cancel_favor)
+    @MainActor
+    func cancel(_ favor: SupabaseService.Favor, userId: UUID) async {
+        await perform(on: favor, userId: userId) {
+            try await SupabaseService.shared.cancelFavor(favorId: favor.id)
+        }
+    }
+
+    /// Runs a favor action, tracks the in-flight state, refreshes, and surfaces errors.
+    @MainActor
+    private func perform(on favor: SupabaseService.Favor, userId: UUID,
+                         _ action: () async throws -> Void) async {
         actingOn.insert(favor.id)
         defer { actingOn.remove(favor.id) }
+        actionError = nil
         do {
-            try await SupabaseService.shared.completeFavor(favorId: favor.id)
+            try await action()
             await load(userId: userId)
-        } catch { }
+        } catch {
+            actionError = error.localizedDescription
+        }
     }
 }
 
@@ -119,6 +173,11 @@ final class FavorsViewModel {
 struct FavorsView: View {
     @Environment(AppViewModel.self) private var appVM
     @State private var vm = FavorsViewModel()
+    @State private var showOfferHelp = false
+    /// Favor the user is giving a gem for (opens the give-a-gem sheet)
+    @State private var givingGemFor: SupabaseService.Favor?
+    /// Favor awaiting cancel confirmation
+    @State private var cancelling: SupabaseService.Favor?
 
     var body: some View {
         NavigationStack {
@@ -132,6 +191,28 @@ struct FavorsView: View {
                         StarfieldHeader(title: "Favors", subtitle: "Kindness in motion.")
                             .padding(.top, 44)
                             .padding(.bottom, 8)
+
+                        // ── Offer help (starts a new favor) ────────────
+                        Button { showOfferHelp = true } label: {
+                            HStack {
+                                Image(systemName: "hand.raised")
+                                Text("Offer help")
+                                    .fontWeight(.semibold)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                            }
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 16)
+                            .metallicGoldCapsule()
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 24)
+
+                        if let error = vm.actionError {
+                            errorBanner(error)
+                                .padding(.horizontal, 16)
+                                .padding(.bottom, 16)
+                        }
 
                         // ── Pending ────────────────────────────────────
                         pendingSection
@@ -158,6 +239,34 @@ struct FavorsView: View {
                     await vm.load(userId: uid)
                 }
             }
+            .sheet(isPresented: $showOfferHelp) {
+                OfferHelpView(userId: appVM.userId) { reload() }
+            }
+            .sheet(item: $givingGemFor) { favor in
+                SendGemView(initialFavor: favor, userId: appVM.userId) { reload() }
+            }
+            .confirmationDialog(
+                cancelling.map { cancelTitle(for: $0) } ?? "",
+                isPresented: Binding(
+                    get: { cancelling != nil },
+                    set: { if !$0 { cancelling = nil } }
+                ),
+                titleVisibility: .visible,
+                presenting: cancelling
+            ) { favor in
+                Button(cancelLabel(for: favor), role: .destructive) {
+                    act { await vm.cancel(favor, userId: $0) }
+                }
+                Button("Keep it", role: .cancel) { }
+            } message: { favor in
+                Text(cancelMessage(for: favor))
+            }
+        }
+    }
+
+    private func reload() {
+        if let uid = appVM.userId {
+            Task { await vm.load(userId: uid) }
         }
     }
 
@@ -173,46 +282,100 @@ struct FavorsView: View {
         case .loaded:
             if vm.hasPending {
                 VStack(alignment: .leading, spacing: 12) {
-                    SectionHeader(
-                        title: "Pending",
-                        count: vm.pendingIncoming.count + vm.pendingOutgoing.count
-                    )
+                    SectionHeader(title: "Pending", count: vm.pendingCount)
 
-                    // Incoming (awaiting my reply) — highest priority
-                    ForEach(vm.pendingIncoming) { favor in
+                    // Someone offered to help me — needs my reply (highest priority)
+                    ForEach(vm.offersToMe) { favor in
                         IncomingPendingCard(
                             favor: favor,
                             isActing: vm.actingOn.contains(favor.id),
-                            onAccept: {
-                                if let uid = appVM.userId {
-                                    Task { await vm.accept(favor, userId: uid) }
-                                }
-                            },
-                            onDecline: {
-                                if let uid = appVM.userId {
-                                    Task { await vm.decline(favor, userId: uid) }
-                                }
-                            }
+                            onAccept: { act { await vm.accept(favor, userId: $0) } },
+                            onDecline: { act { await vm.decline(favor, userId: $0) } }
                         )
                         .transition(.move(edge: .top).combined(with: .opacity))
                     }
 
-                    // Outgoing accepted (in progress)
-                    ForEach(vm.pendingOutgoing) { favor in
-                        OutgoingInProgressCard(
-                            favor: favor,
-                            isActing: vm.actingOn.contains(favor.id),
-                            onComplete: {
-                                if let uid = appVM.userId {
-                                    Task { await vm.complete(favor, userId: uid) }
-                                }
-                            }
+                    // Done and confirmed — time to thank the helper with a gem
+                    ForEach(vm.awaitingMyGem) { favor in
+                        FavorStatusCard(
+                            title: "\(favor.helper_name ?? "Someone") helped you",
+                            description: favor.description,
+                            badge: ("Give a gem", FavoriumTheme.gold),
+                            action: .init(label: "Give a gem", icon: "gift", isPrimary: true) {
+                                givingGemFor = favor
+                            },
+                            cancel: nil,
+                            isActing: vm.actingOn.contains(favor.id)
+                        )
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+
+                    // Someone is helping me — confirm when it's done
+                    ForEach(vm.helpingMe) { favor in
+                        FavorStatusCard(
+                            title: "\(favor.helper_name ?? "Someone") is helping you",
+                            description: favor.description,
+                            badge: ("In progress", FavoriumTheme.accent),
+                            action: .init(label: "Mark complete", icon: "checkmark.circle", isPrimary: false) {
+                                act { await vm.complete(favor, userId: $0) }
+                            },
+                            cancel: .init(label: cancelLabel(for: favor)) { cancelling = favor },
+                            isActing: vm.actingOn.contains(favor.id)
+                        )
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+
+                    // Favors I'm doing for others — only the other person can move these forward
+                    ForEach(vm.myOffersInFlight) { favor in
+                        FavorStatusCard(
+                            title: "You're helping \(favor.helped_name ?? "someone")",
+                            description: favor.description,
+                            badge: helperWaitingBadge(favor),
+                            action: nil,
+                            // Cancellable until the helped person confirms it's done
+                            cancel: favor.isCompleted ? nil
+                                : .init(label: cancelLabel(for: favor)) { cancelling = favor },
+                            isActing: vm.actingOn.contains(favor.id)
                         )
                         .transition(.move(edge: .top).combined(with: .opacity))
                     }
                 }
             }
         }
+    }
+
+    /// What the helper is waiting on, at each stage
+    private func helperWaitingBadge(_ favor: SupabaseService.Favor) -> (String, Color) {
+        let name = favor.helped_name ?? "them"
+        if favor.isProposed { return ("Waiting for \(name) to accept", FavoriumTheme.ivoryDim) }
+        if favor.isAccepted { return ("Waiting for \(name) to confirm", FavoriumTheme.accent) }
+        return ("\(name) confirmed · gem on its way", FavoriumTheme.gold)
+    }
+
+    // MARK: - Cancel copy
+
+    private func isMyOffer(_ favor: SupabaseService.Favor) -> Bool {
+        favor.helper_id == appVM.userId
+    }
+
+    /// "Withdraw offer" before it's accepted (helper only), "Cancel favor" after
+    private func cancelLabel(for favor: SupabaseService.Favor) -> String {
+        favor.isProposed && isMyOffer(favor) ? "Withdraw offer" : "Cancel favor"
+    }
+
+    private func cancelTitle(for favor: SupabaseService.Favor) -> String {
+        favor.isProposed && isMyOffer(favor) ? "Withdraw your offer?" : "Cancel this favor?"
+    }
+
+    private func cancelMessage(for favor: SupabaseService.Favor) -> String {
+        let other = isMyOffer(favor) ? (favor.helped_name ?? "They") : (favor.helper_name ?? "They")
+        return "\(other) will see it as cancelled. This can't be undone."
+    }
+
+    /// Runs a favor action with the signed-in user's id.
+    private func act(_ action: @escaping (UUID) async -> Void) {
+        guard let uid = appVM.userId else { return }
+        Task { await action(uid) }
     }
 
     private var pendingLoadingPlaceholders: some View {
@@ -268,10 +431,10 @@ struct FavorsView: View {
                 } label: {
                     Text(filter.rawValue.capitalized)
                         .font(.system(size: 14, weight: vm.historyFilter == filter ? .semibold : .regular))
-                        .foregroundColor(vm.historyFilter == filter ? .black : FavoriumTheme.ivory)
+                        .foregroundColor(vm.historyFilter == filter ? FavoriumTheme.onGold : FavoriumTheme.ivory)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
-                        .background(vm.historyFilter == filter ? FavoriumTheme.teal : Color.clear)
+                        .background(vm.historyFilter == filter ? FavoriumTheme.accent : Color.clear)
                         .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
@@ -280,7 +443,7 @@ struct FavorsView: View {
         .padding(4)
         .background(FavoriumTheme.surface)
         .clipShape(Capsule())
-        .overlay(Capsule().stroke(FavoriumTheme.tealMuted.opacity(0.25), lineWidth: 1))
+        .overlay(Capsule().stroke(FavoriumTheme.accentMuted.opacity(0.25), lineWidth: 1))
     }
 
     private var historyLoadingPlaceholders: some View {
@@ -298,7 +461,7 @@ struct FavorsView: View {
         VStack(spacing: 10) {
             Image(systemName: "heart")
                 .font(.system(size: 36, weight: .ultraLight))
-                .foregroundColor(FavoriumTheme.tealMuted)
+                .foregroundColor(FavoriumTheme.accentMuted)
             Text("No completed favors yet")
                 .font(FavoriumTheme.bodyFont)
                 .foregroundColor(FavoriumTheme.ivoryDim)
@@ -336,14 +499,14 @@ private struct IncomingPendingCard: View {
                 FavorGemView(
                     gemFamily: .lightning,
                     tier: .bloom,
-                    gemColor: FavoriumTheme.teal,
+                    gemColor: FavoriumTheme.accent,
                     size: 66,
                     showGlow: false
                 )
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .firstTextBaseline) {
-                        Text("\(favor.helper_name ?? "Someone") asked you")
+                        Text("\(favor.helper_name ?? "Someone") offered to help")
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(FavoriumTheme.ivory)
                         Spacer()
@@ -365,11 +528,9 @@ private struct IncomingPendingCard: View {
                         Text("Accept")
                             .fontWeight(.semibold)
                     }
-                    .foregroundColor(.black)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
-                    .background(FavoriumTheme.teal)
-                    .clipShape(Capsule())
+                    .metallicGoldCapsule()
                 }
                 .disabled(isActing)
 
@@ -389,91 +550,106 @@ private struct IncomingPendingCard: View {
                 }
                 .disabled(isActing)
             }
-            .overlay(isActing ? ProgressView().tint(FavoriumTheme.teal) : nil)
+            .overlay(isActing ? ProgressView().tint(FavoriumTheme.accent) : nil)
         }
         .padding(16)
         .background(FavoriumTheme.surface)
         .clipShape(RoundedRectangle(cornerRadius: FavoriumTheme.cardRadius))
         .overlay(
             RoundedRectangle(cornerRadius: FavoriumTheme.cardRadius)
-                .stroke(FavoriumTheme.tealMuted.opacity(0.3), lineWidth: 1)
+                .stroke(FavoriumTheme.accentMuted.opacity(0.3), lineWidth: 1)
         )
     }
 }
 
-// MARK: - Outgoing In-Progress Card
+// MARK: - Favor Status Card
 
-private struct OutgoingInProgressCard: View {
-    let favor: SupabaseService.Favor
-    let isActing: Bool
-    let onComplete: () -> Void
-
-    private var acceptedSubtitle: String {
-        guard let raw = favor.accepted_at else { return "\(favor.helped_name ?? "They") accepted" }
-        let fmt = ISO8601DateFormatter()
-        fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = fmt.date(from: raw) ?? ISO8601DateFormatter().date(from: raw) {
-            let rel = RelativeDateTimeFormatter()
-            rel.unitsStyle = .short
-            return "\(favor.helped_name ?? "They") accepted · \(rel.localizedString(for: date, relativeTo: .now))"
-        }
-        return "\(favor.helped_name ?? "They") accepted"
+/// A pending favor with a status badge and, when it's this user's turn, one action.
+private struct FavorStatusCard: View {
+    struct Action {
+        let label: String
+        let icon: String
+        let isPrimary: Bool
+        let perform: () -> Void
     }
+
+    let title: String
+    let description: String
+    struct Cancel {
+        let label: String
+        let perform: () -> Void
+    }
+
+    let badge: (String, Color)
+    let action: Action?
+    let cancel: Cancel?
+    let isActing: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 12) {
-                FavorGemView(
-                    gemFamily: .lightning,
-                    tier: .bloom,
-                    gemColor: Color(hue: 0.10, saturation: 0.85, brightness: 0.95),
-                    size: 66,
-                    showGlow: false
-                )
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(FavoriumTheme.ivory)
+                Text(description)
+                    .font(FavoriumTheme.bodyFont)
+                    .foregroundColor(FavoriumTheme.ivory.opacity(0.85))
+                    .lineLimit(2)
+                FavorStatusBadge(label: badge.0, color: badge.1)
+                    .padding(.top, 2)
+            }
 
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("You asked \(favor.helped_name ?? "someone")")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(FavoriumTheme.ivory)
-                        Spacer()
-                        FavorStatusBadge(label: "In progress", color: FavoriumTheme.teal)
+            if let action {
+                Button(action: action.perform) {
+                    HStack(spacing: 8) {
+                        if isActing {
+                            ProgressView().tint(action.isPrimary ? FavoriumTheme.onGold : FavoriumTheme.accent)
+                        } else {
+                            Image(systemName: action.icon)
+                                .font(.system(size: 15))
+                        }
+                        Text(action.label)
+                            .fontWeight(.semibold)
                     }
-                    Text(favor.description)
-                        .font(FavoriumTheme.bodyFont)
-                        .foregroundColor(FavoriumTheme.ivory.opacity(0.85))
-                        .lineLimit(2)
-                    Text(acceptedSubtitle)
-                        .font(FavoriumTheme.captionFont)
-                        .foregroundColor(FavoriumTheme.ivoryDim)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .modifier(FavorActionStyle(isPrimary: action.isPrimary))
                 }
+                .disabled(isActing)
             }
 
-            Button(action: onComplete) {
-                HStack(spacing: 8) {
-                    Image(systemName: isActing ? "hourglass" : "checkmark.circle")
-                        .font(.system(size: 15))
-                    Text(isActing ? "Marking completed…" : "Mark completed")
-                        .fontWeight(.semibold)
-                }
-                .foregroundColor(FavoriumTheme.teal)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(Color.clear)
-                .overlay(
-                    Capsule().stroke(FavoriumTheme.teal.opacity(0.6), lineWidth: 1.5)
-                )
+            if let cancel {
+                Button(cancel.label, role: .destructive, action: cancel.perform)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(FavoriumTheme.ivoryDim)
+                    .frame(maxWidth: .infinity)
+                    .disabled(isActing)
             }
-            .clipShape(Capsule())
-            .disabled(isActing)
         }
         .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(FavoriumTheme.surface)
         .clipShape(RoundedRectangle(cornerRadius: FavoriumTheme.cardRadius))
         .overlay(
             RoundedRectangle(cornerRadius: FavoriumTheme.cardRadius)
-                .stroke(FavoriumTheme.tealMuted.opacity(0.25), lineWidth: 1)
+                .stroke(FavoriumTheme.accentMuted.opacity(0.25), lineWidth: 1)
         )
+    }
+}
+
+/// Gold capsule for the primary action, outlined capsule for secondary ones.
+private struct FavorActionStyle: ViewModifier {
+    let isPrimary: Bool
+
+    func body(content: Content) -> some View {
+        if isPrimary {
+            content.metallicGoldCapsule()
+        } else {
+            content
+                .foregroundColor(FavoriumTheme.accent)
+                .overlay(Capsule().stroke(FavoriumTheme.accent.opacity(0.6), lineWidth: 1.5))
+                .contentShape(Capsule())
+        }
     }
 }
 
@@ -508,13 +684,12 @@ private struct HistoryFavorRow: View {
                     .lineLimit(1)
 
                 HStack(spacing: 5) {
-                    Image(systemName: "checkmark.circle")
+                    Image(systemName: statusLabel.icon)
                         .font(.system(size: 11))
-                        .foregroundColor(FavoriumTheme.teal)
-                    Text("Completed")
+                    Text(statusLabel.text)
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(FavoriumTheme.teal)
                 }
+                .foregroundColor(favor.isTransferred ? FavoriumTheme.accent : FavoriumTheme.ivoryDim)
             }
 
             Image(systemName: "chevron.right")
@@ -527,7 +702,7 @@ private struct HistoryFavorRow: View {
         .clipShape(RoundedRectangle(cornerRadius: FavoriumTheme.rowRadius))
         .overlay(
             RoundedRectangle(cornerRadius: FavoriumTheme.rowRadius)
-                .stroke(FavoriumTheme.tealMuted.opacity(0.18), lineWidth: 1)
+                .stroke(FavoriumTheme.accentMuted.opacity(0.18), lineWidth: 1)
         )
     }
 
@@ -545,6 +720,13 @@ private struct HistoryFavorRow: View {
         if favor.isDeclined { return "Favor declined" }
         if favor.isCancelled { return "Favor cancelled" }
         return "Past favor"
+    }
+
+    private var statusLabel: (text: String, icon: String) {
+        if favor.isTransferred { return ("Gem given", "gift") }
+        if favor.isDeclined    { return ("Declined", "xmark.circle") }
+        if favor.isCancelled   { return ("Cancelled", "minus.circle") }
+        return ("Completed", "checkmark.circle")
     }
 
     private var rowGemColor: Color {

@@ -1,7 +1,8 @@
 import Foundation
 import Supabase
 
-struct Profile: Decodable, Identifiable {
+/// Nonisolated so the Supabase SDK can decode it off the main actor.
+nonisolated struct Profile: Decodable, Identifiable, Sendable {
     let id: UUID
     let display_name: String?
     let is_admin: Bool

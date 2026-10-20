@@ -15,6 +15,7 @@ final class AppViewModel {
     // MARK: - Identity
     var userId: UUID?
     var displayName: String = ""
+    var email: String = ""
     var isAuthenticated: Bool = false
 
     // MARK: - Shared loading flag (used by tabs during first load)
@@ -36,10 +37,14 @@ final class AppViewModel {
 
         userId = id
         isAuthenticated = true
+        email = session.email ?? ""
 
-        if let profile = try? await ProfileService.shared.me() {
-            displayName = profile.display_name ?? ""
-        }
+        // The profile row is the source of truth for the name; fall back to the
+        // name given at sign-up so the Profile tab never shows a blank.
+        let profileName = (try? await ProfileService.shared.me())?.display_name
+        displayName = [profileName, session.signUpDisplayName]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty } ?? ""
     }
 
     @MainActor
@@ -47,6 +52,7 @@ final class AppViewModel {
         await authVM.signOut()
         userId = nil
         displayName = ""
+        email = ""
         isAuthenticated = false
     }
 }

@@ -27,7 +27,6 @@ final class SupabaseService {
 
         // Request a small payload and decode from raw response data for broad SDK compatibility
         let response = try await client
-            .database
             .from("coins")
             .select("id")
             .limit(1)
@@ -46,6 +45,9 @@ final class SupabaseService {
     struct AuthSession: Sendable {
         let userId: String?
         let accessToken: String?
+        let email: String?
+        /// display_name saved in auth metadata at sign-up (fallback when the profile row can't load)
+        let signUpDisplayName: String?
     }
 
     func signUp(email: String, password: String, displayName: String) async throws {
@@ -63,7 +65,12 @@ final class SupabaseService {
     func currentSession() async throws -> AuthSession? {
         do {
             let session = try await client.auth.session
-            return AuthSession(userId: session.user.id.uuidString, accessToken: session.accessToken)
+            return AuthSession(
+                userId: session.user.id.uuidString,
+                accessToken: session.accessToken,
+                email: session.user.email,
+                signUpDisplayName: session.user.userMetadata["display_name"]?.stringValue
+            )
         } catch {
             return nil
         }
@@ -94,7 +101,7 @@ final class SupabaseService {
         }
     }
     func myFavors(userId: UUID) async throws -> [CoinSummary] {
-        let response = try await client.database
+        let response = try await client
             .from("coins")
             .select("id,serial,name,transfer_count,creator_id,owner_id,created_at,dna")
             .eq("owner_id", value: userId.uuidString)
@@ -105,7 +112,7 @@ final class SupabaseService {
     }
 
     func myOriginals(userId: UUID) async throws -> [CoinSummary] {
-        let response = try await client.database
+        let response = try await client
             .from("coins")
             .select("id,serial,name,transfer_count,creator_id,owner_id,created_at,dna")
             .eq("creator_id", value: userId.uuidString)
@@ -251,7 +258,7 @@ final class SupabaseService {
         struct CoinJourneyParams: Encodable {
             let p_coin_id: String
         }
-        let response = try await client.database
+        let response = try await client
             .rpc("coin_journey", params: CoinJourneyParams(p_coin_id: coinID.uuidString))
             .execute()
         return try JSONDecoder().decode(CoinJourneyPayload.self, from: response.data)
@@ -282,7 +289,7 @@ final class SupabaseService {
     
     /// Fetch favors where current user is being helped (incoming offers)
     func myIncomingFavors(userId: UUID) async throws -> [Favor] {
-        let response = try await client.database
+        let response = try await client
             .from("favors")
             .select("id,helper_id,helped_id,description,status,created_at,accepted_at,completed_at,transferred_at,coin_id,helper:profiles!favors_helper_id_fkey(display_name),helped:profiles!favors_helped_id_fkey(display_name)")
             .eq("helped_id", value: userId.uuidString)
@@ -296,7 +303,7 @@ final class SupabaseService {
     
     /// Fetch favors where current user is the helper (outgoing offers)
     func myOutgoingFavors(userId: UUID) async throws -> [Favor] {
-        let response = try await client.database
+        let response = try await client
             .from("favors")
             .select("id,helper_id,helped_id,description,status,created_at,accepted_at,completed_at,transferred_at,coin_id,helper:profiles!favors_helper_id_fkey(display_name),helped:profiles!favors_helped_id_fkey(display_name)")
             .eq("helper_id", value: userId.uuidString)
@@ -316,7 +323,7 @@ final class SupabaseService {
             let p_description: String
         }
         
-        let response = try await client.database
+        let response = try await client
             .rpc("propose_favor", params: ProposeFavorParams(
                 p_helped_id: helpedUserId.uuidString,
                 p_description: description
@@ -336,7 +343,7 @@ final class SupabaseService {
             let p_accept: Bool
         }
         
-        _ = try await client.database
+        _ = try await client
             .rpc("respond_to_favor", params: RespondParams(
                 p_favor_id: favorId.uuidString,
                 p_accept: true
@@ -352,7 +359,7 @@ final class SupabaseService {
             let p_accept: Bool
         }
         
-        _ = try await client.database
+        _ = try await client
             .rpc("respond_to_favor", params: RespondParams(
                 p_favor_id: favorId.uuidString,
                 p_accept: false
@@ -366,7 +373,7 @@ final class SupabaseService {
             let p_favor_id: String
         }
         
-        _ = try await client.database
+        _ = try await client
             .rpc("cancel_favor", params: CancelParams(
                 p_favor_id: favorId.uuidString
             ))
@@ -379,7 +386,7 @@ final class SupabaseService {
             let p_favor_id: String
         }
         
-        _ = try await client.database
+        _ = try await client
             .rpc("complete_favor", params: CompleteParams(
                 p_favor_id: favorId.uuidString
             ))
@@ -393,7 +400,7 @@ final class SupabaseService {
             let p_coin_id: String
         }
         
-        _ = try await client.database
+        _ = try await client
             .rpc("transfer_coin", params: TransferParams(
                 p_favor_id: favorId.uuidString,
                 p_coin_id: coinId.uuidString
@@ -411,7 +418,7 @@ final class SupabaseService {
         }
         
         // Call RPC that handles the complete workflow
-        let response = try await client.database
+        let response = try await client
             .rpc("complete_favor_and_mint", params: CompleteMintParams(
                 p_favor_id: favorId.uuidString,
                 p_coin_name: coinName
@@ -439,7 +446,7 @@ final class SupabaseService {
     
     /// Search for users by display name
     func searchUsers(query: String) async throws -> [UserProfile] {
-        let response = try await client.database
+        let response = try await client
             .from("profiles")
             .select("id,display_name,created_at")
             .ilike("display_name", pattern: "%\(query)%")
@@ -450,6 +457,32 @@ final class SupabaseService {
     }
     
     /// Get users you've interacted with (exchanged favors with)
+    /// Everyone the user is connected with — the people propose_favor allows them to help.
+    /// `connections` stores each pair once, ordered (user_a < user_b), so the user can be on either side.
+    func myConnections(userId: UUID) async throws -> [UserProfile] {
+        struct ConnectionRow: Decodable {
+            let user_a: UUID
+            let user_b: UUID
+        }
+
+        let rowsResponse = try await client
+            .from("connections")
+            .select("user_a,user_b")
+            .or("user_a.eq.\(userId.uuidString),user_b.eq.\(userId.uuidString)")
+            .execute()
+        let rows = try JSONDecoder().decode([ConnectionRow].self, from: rowsResponse.data)
+
+        let otherIds = Set(rows.map { $0.user_a == userId ? $0.user_b : $0.user_a })
+        guard !otherIds.isEmpty else { return [] }
+
+        let profilesResponse = try await client
+            .from("profiles")
+            .select("id,display_name,created_at")
+            .in("id", values: otherIds.map(\.uuidString))
+            .execute()
+        return try JSONDecoder().decode([UserProfile].self, from: profilesResponse.data)
+    }
+
     func getConnectedUsers(userId: UUID, limit: Int = 10) async throws -> [UserProfile] {
         struct RPCParams: Encodable {
             let p_user_id: String
@@ -457,7 +490,7 @@ final class SupabaseService {
         }
         
         // Get unique user IDs from favors where current user was either helper or helped
-        let response = try await client.database
+        let response = try await client
             .rpc("get_connected_users", params: RPCParams(
                 p_user_id: userId.uuidString,
                 p_limit: limit
@@ -469,7 +502,7 @@ final class SupabaseService {
     
     /// Get a specific user profile
     func getUserProfile(userId: UUID) async throws -> UserProfile {
-        let response = try await client.database
+        let response = try await client
             .from("profiles")
             .select("id,display_name,created_at")
             .eq("id", value: userId.uuidString)
