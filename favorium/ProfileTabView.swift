@@ -45,6 +45,9 @@ struct ProfileTabView: View {
 
     @State private var showSignOutConfirm = false
     @State private var stats = ProfileStatsModel()
+    @State private var push = PushManager.shared
+    @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         NavigationStack {
@@ -186,7 +189,7 @@ struct ProfileTabView: View {
 
     private var settingsSection: some View {
         VStack(spacing: 1) {
-            settingsRow(icon: "bell", label: "Notifications")
+            notificationsRow
             settingsRow(icon: "lock", label: "Privacy")
             settingsRow(icon: "questionmark.circle", label: "Help & Feedback")
             settingsRow(icon: "info.circle", label: "About Favorium")
@@ -197,6 +200,58 @@ struct ProfileTabView: View {
             RoundedRectangle(cornerRadius: FavoriumTheme.cardRadius)
                 .stroke(FavoriumTheme.accentMuted.opacity(0.2), lineWidth: 1)
         )
+    }
+
+    // MARK: - Notifications
+
+    private var notificationsEnabled: Bool {
+        push.authorizationStatus == .authorized || push.authorizationStatus == .provisional
+            || push.authorizationStatus == .ephemeral
+    }
+
+    /// Never asked → show the system prompt. Allowed or denied → open the app's
+    /// notification settings (iOS only lets an app ask once).
+    private var notificationsRow: some View {
+        Button {
+            if push.canAskPermission {
+                Task { await push.requestAuthorization() }
+            } else if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
+                openURL(url)
+            }
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: notificationsEnabled ? "bell.badge" : "bell.slash")
+                    .font(.system(size: 16))
+                    .foregroundColor(FavoriumTheme.accent)
+                    .frame(width: 24)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Notifications")
+                        .font(FavoriumTheme.bodyFont)
+                        .foregroundColor(FavoriumTheme.ivory)
+                    Text(notificationsEnabled
+                         ? "New offers and gems you receive"
+                         : (push.canAskPermission ? "Tap to turn on" : "Turn on in Settings"))
+                        .font(FavoriumTheme.captionFont)
+                        .foregroundColor(FavoriumTheme.ivoryDim)
+                }
+                Spacer()
+                Text(notificationsEnabled ? "On" : "Off")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(notificationsEnabled ? FavoriumTheme.accent : FavoriumTheme.ivoryDim)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12))
+                    .foregroundColor(FavoriumTheme.ivoryDim)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        // Re-check when returning from iOS Settings, where the user may have flipped it
+        .task(id: scenePhase) {
+            if scenePhase == .active { await push.refreshAuthorizationStatus() }
+        }
+        .accessibilityLabel("Notifications, \(notificationsEnabled ? "on" : "off")")
     }
 
     private func settingsRow(icon: String, label: String) -> some View {
