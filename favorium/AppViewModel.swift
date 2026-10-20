@@ -49,6 +49,8 @@ final class AppViewModel {
 
     @MainActor
     func signOut(authVM: AuthViewModel) async {
+        // Remove this phone's push token while the session is still valid
+        await PushManager.shared.signingOut()
         await authVM.signOut()
         userId = nil
         displayName = ""

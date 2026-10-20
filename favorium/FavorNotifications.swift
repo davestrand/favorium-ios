@@ -31,7 +31,7 @@ final class FavorNotificationCenter {
     private(set) var banner: FavorBanner?
     /// Bumps on every favor change so screens know to reload
     private(set) var changeToken = 0
-    /// Favors waiting on this user: offers to answer, favors to confirm, gems to give
+    /// Favors waiting on this user (contract §8): offers to answer + gems you owe
     private(set) var actionCount = 0
 
     private var userId: UUID?
@@ -124,43 +124,84 @@ final class FavorNotificationCenter {
         guard let favorId = record["id"]?.stringValue.flatMap(UUID.init(uuidString:)),
               let status = record["status"]?.stringValue else { return }
 
-        // Skip the user's own actions
+        // Skip the user's own actions (cancel_favor records who cancelled; the local
+        // set covers the moment before the row update arrives)
         if locallyChanged.remove(favorId) != nil { return }
+        if status == "cancelled",
+           let cancelledBy = record["cancelled_by"]?.stringValue.flatMap(UUID.init(uuidString:)),
+           cancelledBy == userId { return }
 
         let otherKey = iAmHelper ? "helped_id" : "helper_id"
         let otherId = record[otherKey]?.stringValue.flatMap(UUID.init(uuidString:))
         let name = await displayName(otherId)
         let description = record["description"]?.stringValue
 
+        // "A Favor arrived" names the gem
+        var gemName: String?
+        if status == "transferred", let coinId = record["coin_id"]?.stringValue.flatMap(UUID.init(uuidString:)) {
+            gemName = (try? await SupabaseService.shared.coinName(coinId: coinId)) ?? nil
+        }
+
         guard let message = Self.message(status: status, iAmHelper: iAmHelper, isInsert: isInsert,
-                                         name: name, description: description) else { return }
+                                         name: name, description: description, gemName: gemName) else { return }
         show(message)
     }
 
     /// What to tell this user about a favor change — nil when it's their own move.
     /// The helped person accepts, declines, completes and gives gems; either side may cancel.
+    /// Copy is owned by the backend contract (PUSH_CONTRACT.md): §7 for the two pushed
+    /// moments (offer, gem), §7.1 for the in-app-only transitions. Don't reword here —
+    /// change it in the contract first so web, iOS and push stay identical.
     static func message(status: String, iAmHelper: Bool, isInsert: Bool,
-                        name: String, description: String?) -> FavorBanner? {
-        let quoted = description.map { "\u{201C}\($0)\u{201D}" }
+                        name: String, description: String?, gemName: String? = nil) -> FavorBanner? {
+        let desc = "\u{201C}\(clipped(description))\u{201D}"
         if iAmHelper {
+            // The helped person performs accept / decline / complete / give, so only the helper hears
             switch status {
-            case "accepted":    return FavorBanner(title: "\(name) accepted your offer", detail: quoted, icon: "hand.thumbsup.fill")
-            case "declined":    return FavorBanner(title: "\(name) declined your offer", detail: quoted, icon: "hand.raised.slash")
-            case "completed":   return FavorBanner(title: "\(name) marked your favor complete", detail: quoted, icon: "checkmark.seal.fill")
-            case "transferred": return FavorBanner(title: "\(name) gave you a gem", detail: quoted, icon: "gift.fill")
-            case "cancelled":   return FavorBanner(title: "\(name) cancelled the favor", detail: quoted, icon: "xmark.circle")
-            default:            return nil
+            case "accepted":
+                return FavorBanner(title: "Offer accepted",
+                                   detail: "\(name) said yes to \(desc). Show up and make it count.",
+                                   icon: "hand.thumbsup.fill")
+            case "declined":
+                return FavorBanner(title: "Offer declined",
+                                   detail: "\(name) passed on \(desc). No harm — there are other offers to make.",
+                                   icon: "hand.raised.slash")
+            case "completed":
+                return FavorBanner(title: "It\u{2019}s done",
+                                   detail: "\(name) marked \(desc) complete. They owe you a Favor now.",
+                                   icon: "checkmark.seal.fill")
+            case "transferred":
+                return FavorBanner(title: "A Favor arrived",
+                                   detail: "\(name) gave you \(gemName ?? "a gem").",
+                                   icon: "gift.fill")
+            case "cancelled":
+                return FavorBanner(title: "Offer called off",
+                                   detail: "\(name) cancelled \(desc). Nothing left to do here.",
+                                   icon: "xmark.circle")
+            default:
+                return nil
             }
         } else {
             if isInsert && status == "proposed" {
-                return FavorBanner(title: "\(name) offered to help", detail: quoted, icon: "hand.raised.fill")
+                return FavorBanner(title: "A new Favor offer",
+                                   detail: "\(name) offered to help you: \(desc)",
+                                   icon: "hand.raised.fill")
             }
-            // The helped person makes every other move themselves, except a helper cancelling
+            // Everything else on this side is the helped person's own move, except a helper withdrawing
             if status == "cancelled" {
-                return FavorBanner(title: "\(name) withdrew their offer", detail: quoted, icon: "xmark.circle")
+                return FavorBanner(title: "Offer withdrawn",
+                                   detail: "\(name) withdrew \(desc). You can offer one back if you like.",
+                                   icon: "xmark.circle")
             }
             return nil
         }
+    }
+
+    /// Whitespace-collapsed and clipped at 90 characters, as the contract specifies.
+    static func clipped(_ description: String?) -> String {
+        let collapsed = (description ?? "").split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        guard collapsed.count > 90 else { return collapsed.isEmpty ? "your favor" : collapsed }
+        return String(collapsed.prefix(89)).trimmingCharacters(in: .whitespaces) + "\u{2026}"
     }
 
     @MainActor
@@ -191,7 +232,9 @@ final class FavorNotificationCenter {
     private func refreshActionCount() async {
         guard let userId else { return }
         guard let incoming = try? await SupabaseService.shared.myIncomingFavors(userId: userId) else { return }
-        actionCount = incoming.filter { $0.isProposed || $0.isAccepted || ($0.isCompleted && $0.coin_id == nil) }.count
+        // Contract §8 (same rule as the push badge and the web Favors badge):
+        // offers to answer + gems you owe
+        actionCount = incoming.filter { $0.isProposed || ($0.isCompleted && $0.coin_id == nil) }.count
     }
 }
 
@@ -220,10 +263,9 @@ struct FavorBannerView: View {
                         .lineLimit(2)
                     if let detail = banner.detail {
                         Text(detail)
-                            .font(.system(size: 13, design: .serif))
-                            .italic()
+                            .font(.system(size: 13))
                             .foregroundColor(FavoriumTheme.ivoryDim)
-                            .lineLimit(1)
+                            .lineLimit(2)
                     }
                 }
                 Spacer(minLength: 0)

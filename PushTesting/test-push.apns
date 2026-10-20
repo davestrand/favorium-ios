@@ -1,0 +1,13 @@
+{
+  "Simulator Target Bundle": "com.hobjoblin.favorium",
+  "aps": {
+    "alert": {
+      "title": "Alex offered to help",
+      "body": "“Help move the couch upstairs”"
+    },
+    "sound": "default",
+    "badge": 1,
+    "thread-id": "favors"
+  },
+  "route": "favors"
+}

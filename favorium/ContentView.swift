@@ -12,6 +12,7 @@ struct ContentView: View {
     @State private var appVM = AppViewModel()
     @State private var selectedTab: Tab = .collection
     @State private var notifications = FavorNotificationCenter()
+    @State private var push = PushManager.shared
     @Environment(\.scenePhase) private var scenePhase
 
     enum Tab { case collection, favors, profile }
@@ -39,10 +40,21 @@ struct ContentView: View {
         // Live favor updates for whoever is signed in; stops on sign-out
         .task(id: appVM.userId) {
             if let userId = appVM.userId {
+                await push.signedIn(userId: userId)
                 await notifications.start(userId: userId)
             } else {
                 await notifications.stop()
             }
+        }
+        // A tapped push opens the matching tab
+        .onChange(of: push.pendingRoute) { _, route in
+            guard let route else { return }
+            selectedTab = route == .collection ? .collection : .favors
+            push.pendingRoute = nil
+        }
+        // App icon badge mirrors the Favors tab badge
+        .onChange(of: notifications.actionCount) { _, count in
+            push.updateBadge(count)
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {

@@ -130,6 +130,12 @@ struct OfferHelpView: View {
                 }
             case .done:
                 doneView
+                    // A natural moment to ask: they'll want to hear back
+                    .task {
+                        if PushManager.shared.canAskPermission {
+                            await PushManager.shared.requestAuthorization()
+                        }
+                    }
             case .failed(let msg):
                 failureView(msg)
             }

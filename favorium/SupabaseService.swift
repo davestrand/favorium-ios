@@ -457,6 +457,38 @@ final class SupabaseService {
     }
     
     /// Get users you've interacted with (exchanged favors with)
+    // MARK: - Push device tokens
+
+    /// Registers this device's APNs token for the signed-in user (register_device).
+    /// The backend (owned by the web project, see its PUSH_CONTRACT.md) sends pushes from
+    /// a database webhook — the app never calls notify-favor itself.
+    func registerDevice(token: String, environment: String) async throws {
+        struct Params: Encodable { let p_token: String; let p_environment: String; let p_platform: String }
+        _ = try await client
+            .rpc("register_device", params: Params(p_token: token, p_environment: environment, p_platform: "ios"))
+            .execute()
+    }
+
+    /// Removes this device's token for the signed-in user (unregister_device).
+    func unregisterDevice(token: String) async throws {
+        struct Params: Encodable { let p_token: String }
+        _ = try await client
+            .rpc("unregister_device", params: Params(p_token: token))
+            .execute()
+    }
+
+    /// A gem's current name, or nil if it can't be read.
+    func coinName(coinId: UUID) async throws -> String? {
+        struct Row: Decodable { let name: String? }
+        let response = try await client
+            .from("coins")
+            .select("name")
+            .eq("id", value: coinId.uuidString)
+            .limit(1)
+            .execute()
+        return try JSONDecoder().decode([Row].self, from: response.data).first?.name
+    }
+
     /// A user's display name, or nil if it can't be read.
     func displayName(userId: UUID) async throws -> String? {
         struct Row: Decodable { let display_name: String? }

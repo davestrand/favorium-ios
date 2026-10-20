@@ -11,6 +11,8 @@ import SwiftUI
 
 @main
 struct FavoriumApp: App {
+    /// Receives APNs device tokens and sets the notification delegate at launch
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var authVM = AuthViewModel()
 
     var body: some Scene {

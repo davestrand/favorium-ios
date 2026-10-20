@@ -175,6 +175,8 @@ struct FavorsView: View {
     @Environment(FavorNotificationCenter.self) private var notifications
     @State private var vm = FavorsViewModel()
     @State private var showOfferHelp = false
+    @State private var push = PushManager.shared
+    @AppStorage("pushPromptDismissed") private var pushPromptDismissed = false
     /// Favor the user is giving a gem for (opens the give-a-gem sheet)
     @State private var givingGemFor: SupabaseService.Favor?
     /// Favor awaiting cancel confirmation
@@ -208,6 +210,17 @@ struct FavorsView: View {
                         }
                         .padding(.horizontal, 16)
                         .padding(.bottom, 24)
+
+                        // Explain notifications before the one-time system prompt
+                        if push.canAskPermission && !pushPromptDismissed {
+                            PushPermissionCard {
+                                Task { await push.requestAuthorization() }
+                            } onDismiss: {
+                                pushPromptDismissed = true
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 24)
+                        }
 
                         if let error = vm.actionError {
                             errorBanner(error)
