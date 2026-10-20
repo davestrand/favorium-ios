@@ -11,6 +11,8 @@ struct ContentView: View {
     @Environment(AuthViewModel.self) private var authVM
     @State private var appVM = AppViewModel()
     @State private var selectedTab: Tab = .collection
+    @State private var notifications = FavorNotificationCenter()
+    @Environment(\.scenePhase) private var scenePhase
 
     enum Tab { case collection, favors, profile }
 
@@ -34,6 +36,19 @@ struct ContentView: View {
         .task {
             await appVM.bootstrap()
         }
+        // Live favor updates for whoever is signed in; stops on sign-out
+        .task(id: appVM.userId) {
+            if let userId = appVM.userId {
+                await notifications.start(userId: userId)
+            } else {
+                await notifications.stop()
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                Task { await notifications.appBecameActive() }
+            }
+        }
         .onChange(of: authVM.isAuthenticated) { _, newValue in
             if newValue {
                 Task { await appVM.bootstrap() }
@@ -55,6 +70,7 @@ struct ContentView: View {
             FavorsView()
                 .environment(appVM)
                 .tag(Tab.favors)
+                .badge(notifications.actionCount)
                 .tabItem {
                     Label("Favors", systemImage: "heart")
                 }
@@ -69,6 +85,24 @@ struct ContentView: View {
         }
         .tint(FavoriumTheme.accent)
         .preferredColorScheme(.dark)
+        .environment(notifications)
+        // Slide-in banner for live favor changes
+        .overlay(alignment: .top) {
+            if let banner = notifications.banner {
+                FavorBannerView(banner: banner) {
+                    selectedTab = .favors
+                    notifications.dismissBanner()
+                } onDismiss: {
+                    notifications.dismissBanner()
+                }
+                .padding(.horizontal, 12)
+                .padding(.top, 4)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .id(banner.id)
+            }
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: notifications.banner)
+        .sensoryFeedback(.success, trigger: notifications.banner) { _, new in new != nil }
     }
 
     // MARK: - Splash

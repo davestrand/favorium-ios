@@ -457,6 +457,18 @@ final class SupabaseService {
     }
     
     /// Get users you've interacted with (exchanged favors with)
+    /// A user's display name, or nil if it can't be read.
+    func displayName(userId: UUID) async throws -> String? {
+        struct Row: Decodable { let display_name: String? }
+        let response = try await client
+            .from("profiles")
+            .select("display_name")
+            .eq("id", value: userId.uuidString)
+            .limit(1)
+            .execute()
+        return try JSONDecoder().decode([Row].self, from: response.data).first?.display_name
+    }
+
     /// Renames a gem (rename_coin). Only the gem's original creator may rename it;
     /// the server trims/collapses whitespace, enforces 1–40 characters, and returns
     /// the name exactly as stored.

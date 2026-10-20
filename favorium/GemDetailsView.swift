@@ -120,6 +120,11 @@ struct GemDetailView: View {
                     .padding(.horizontal, 24)
                     .padding(.bottom, 20)
 
+                // ── Story (matches the Collection card) ───────────────────
+                storyCard(j)
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 24)
+
                 // ── Send button (owner, with a completed favor awaiting a gem) ─
                 if j.isOwner == true && vm.hasFavorsAwaitingGem {
                     sendButton
@@ -336,6 +341,68 @@ struct GemDetailView: View {
                 .stroke(FavoriumTheme.accent.opacity(0.25), lineWidth: 1)
         )
         .accessibilityElement(children: .combine)
+    }
+
+    // MARK: - Story
+
+    /// The favor this gem remembers. For the holder, that's the favor that brought it
+    /// to them (the same story the Collection card shows); otherwise its latest favor.
+    private func story(_ j: SupabaseService.CoinJourneyPayload) -> SupabaseService.CoinHistoryItem? {
+        let transfers = j.history
+            .filter { $0.eventType == "transferred" }
+            .sorted { $0.createdAt > $1.createdAt }
+        if j.isOwner == true {
+            return transfers.first { $0.isToMe == true }
+        }
+        return transfers.first
+    }
+
+    private func storyCard(_ j: SupabaseService.CoinJourneyPayload) -> some View {
+        let item = story(j)
+        return VStack(alignment: .leading, spacing: 8) {
+            Text(j.isOwner == true ? "How it came to you" : "Its latest story")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(FavoriumTheme.accentMuted)
+                .textCase(.uppercase)
+
+            if let item {
+                Text("\u{201C}\(item.description ?? "A favor")\u{201D}")
+                    .font(.system(size: 17, design: .serif))
+                    .italic()
+                    .foregroundColor(FavoriumTheme.ivory)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(storyCaption(item, isOwner: j.isOwner == true))
+                    .font(FavoriumTheme.captionFont)
+                    .foregroundColor(FavoriumTheme.ivoryDim)
+            } else {
+                Text(GemStoryCopy.noStoryTitle)
+                    .font(.system(size: 17, design: .serif))
+                    .italic()
+                    .foregroundColor(FavoriumTheme.ivoryDim)
+                Text(GemStoryCopy.noStoryExplanation)
+                    .font(FavoriumTheme.captionFont)
+                    .foregroundColor(FavoriumTheme.ivoryDim)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(FavoriumTheme.surface)
+        .clipShape(RoundedRectangle(cornerRadius: FavoriumTheme.cardRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: FavoriumTheme.cardRadius)
+                .stroke(FavoriumTheme.accentMuted.opacity(0.25), lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
+    }
+
+    /// Holder: "for Sam · Oct 19" (same as the Collection card).
+    /// Others: "Alex helped Sam · Oct 19". The gem goes from the helped person to the helper.
+    private func storyCaption(_ item: SupabaseService.CoinHistoryItem, isOwner: Bool) -> String {
+        let helped = item.fromName ?? "someone"
+        let who = isOwner ? "for \(helped)" : "\(item.toName ?? "Someone") helped \(helped)"
+        let date = formattedDate(item.createdAt)
+        return date.isEmpty ? who : "\(who) · \(date)"
     }
 
     private func holderLabel(_ j: SupabaseService.CoinJourneyPayload) -> String {

@@ -11,6 +11,7 @@ import Supabase
 
 struct CollectionView: View {
     @Environment(AppViewModel.self) private var appVM
+    @Environment(FavorNotificationCenter.self) private var notifications
     @State private var vm = CollectionViewModel()
     @State private var selectedCoin: SupabaseService.CoinSummary?
     @State private var showSendPicker = false
@@ -58,6 +59,10 @@ struct CollectionView: View {
                 }
             }
             .navigationBarHidden(true)
+            // Live updates: a gem received or a favor completed elsewhere shows up immediately
+            .onChange(of: notifications.changeToken) { _, _ in
+                if let uid = appVM.userId { Task { await vm.load(userId: uid) } }
+            }
             .task {
                 if let uid = appVM.userId, case .idle = vm.loadState {
                     await vm.load(userId: uid)
@@ -369,16 +374,18 @@ private struct GemGridCell: View {
                     .font(.system(size: 11))
                     .foregroundColor(FavoriumTheme.ivoryDim)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             } else {
-                Text("No story yet")
+                Text(GemStoryCopy.noStoryTitle)
                     .font(.system(size: 12, design: .serif))
                     .italic()
                     .foregroundColor(FavoriumTheme.ivoryDim)
                     .lineLimit(2, reservesSpace: true)
-                Text("Waiting for its first favor")
+                Text(GemStoryCopy.noStoryHint)
                     .font(.system(size: 11))
                     .foregroundColor(FavoriumTheme.accentMuted)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             }
         }
     }
@@ -624,4 +631,5 @@ func parseCrystalDNA(_ dna: JSONObject?, seed: String) -> CrystalDNA? {
     @Previewable @State var appVM = AppViewModel()
     CollectionView()
         .environment(appVM)
+        .environment(FavorNotificationCenter())
 }

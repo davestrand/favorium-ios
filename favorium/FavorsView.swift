@@ -172,6 +172,7 @@ final class FavorsViewModel {
 
 struct FavorsView: View {
     @Environment(AppViewModel.self) private var appVM
+    @Environment(FavorNotificationCenter.self) private var notifications
     @State private var vm = FavorsViewModel()
     @State private var showOfferHelp = false
     /// Favor the user is giving a gem for (opens the give-a-gem sheet)
@@ -239,6 +240,8 @@ struct FavorsView: View {
                     await vm.load(userId: uid)
                 }
             }
+            // Live updates: reload whenever a favor changes elsewhere
+            .onChange(of: notifications.changeToken) { _, _ in reload() }
             .sheet(isPresented: $showOfferHelp) {
                 OfferHelpView(userId: appVM.userId) { reload() }
             }
@@ -255,6 +258,8 @@ struct FavorsView: View {
                 presenting: cancelling
             ) { favor in
                 Button(cancelLabel(for: favor), role: .destructive) {
+                    // Don't notify the user about their own cancellation
+                    notifications.noteLocalAction(favor.id)
                     act { await vm.cancel(favor, userId: $0) }
                 }
                 Button("Keep it", role: .cancel) { }
@@ -769,4 +774,5 @@ private struct FavorStatusBadge: View {
     @Previewable @State var appVM = AppViewModel()
     FavorsView()
         .environment(appVM)
+        .environment(FavorNotificationCenter())
 }

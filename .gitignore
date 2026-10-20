@@ -91,3 +91,6 @@ iOSInjectionProject/
 
 # macOS
 .DS_Store
+
+## Apple signing / push keys — never commit
+*.p8

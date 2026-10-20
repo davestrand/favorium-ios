@@ -40,3 +40,13 @@ enum GemNaming {
         name.split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 }
+
+/// Shared wording for a gem's "story" — the favor that brought it to its holder —
+/// so the Collection card and the detail page always say the same thing.
+enum GemStoryCopy {
+    static let noStoryTitle = "No story yet"
+    /// Short enough for the narrow Collection card
+    static let noStoryHint = "Awaiting a favor"
+    static let noStoryExplanation =
+        "This gem hasn't been part of a favor yet. Its story begins the first time it's given in thanks."
+}
