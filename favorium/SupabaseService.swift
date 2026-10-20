@@ -214,6 +214,11 @@ final class SupabaseService {
         let toName: String?
         let isFromMe: Bool?         // nullable when called without user JWT
         let isToMe: Bool?           // nullable when called without user JWT
+        // People on this step (ids drive the initials colour; avatars are photo URLs)
+        let fromId: UUID?
+        let toId: UUID?
+        let fromAvatar: String?
+        let toAvatar: String?
 
         enum CodingKeys: String, CodingKey {
             case id, description
@@ -223,6 +228,10 @@ final class SupabaseService {
             case toName     = "to_name"
             case isFromMe   = "is_from_me"
             case isToMe     = "is_to_me"
+            case fromId     = "from_id"
+            case toId       = "to_id"
+            case fromAvatar = "from_avatar"
+            case toAvatar   = "to_avatar"
         }
     }
 
@@ -238,6 +247,10 @@ final class SupabaseService {
         let createdAt: String
         let creatorName: String?
         let ownerName: String?
+        let creatorId: UUID?
+        let ownerId: UUID?
+        let creatorAvatar: String?
+        let ownerAvatar: String?
         let isOwner: Bool?          // null when called without user JWT
         let isCreator: Bool?        // null when called without user JWT
         let history: [CoinHistoryItem]
@@ -249,6 +262,10 @@ final class SupabaseService {
             case createdAt    = "created_at"
             case creatorName  = "creator_name"
             case ownerName    = "owner_name"
+            case creatorId    = "creator_id"
+            case ownerId      = "owner_id"
+            case creatorAvatar = "creator_avatar"
+            case ownerAvatar  = "owner_avatar"
             case isOwner      = "is_owner"
             case isCreator    = "is_creator"
         }
@@ -278,6 +295,9 @@ final class SupabaseService {
         let coin_id: UUID?
         let helper_name: String?
         let helped_name: String?
+        /// Profile photo URLs (null until the person adds one)
+        var helper_avatar_url: String? = nil
+        var helped_avatar_url: String? = nil
         
         var isProposed: Bool { status == "proposed" }
         var isAccepted: Bool { status == "accepted" }
@@ -291,7 +311,7 @@ final class SupabaseService {
     func myIncomingFavors(userId: UUID) async throws -> [Favor] {
         let response = try await client
             .from("favors")
-            .select("id,helper_id,helped_id,description,status,created_at,accepted_at,completed_at,transferred_at,coin_id,helper:profiles!favors_helper_id_fkey(display_name),helped:profiles!favors_helped_id_fkey(display_name)")
+            .select("id,helper_id,helped_id,description,status,created_at,accepted_at,completed_at,transferred_at,coin_id,helper:profiles!favors_helper_id_fkey(display_name,avatar_url),helped:profiles!favors_helped_id_fkey(display_name,avatar_url)")
             .eq("helped_id", value: userId.uuidString)
             .order("created_at", ascending: false)
             .execute()
@@ -305,7 +325,7 @@ final class SupabaseService {
     func myOutgoingFavors(userId: UUID) async throws -> [Favor] {
         let response = try await client
             .from("favors")
-            .select("id,helper_id,helped_id,description,status,created_at,accepted_at,completed_at,transferred_at,coin_id,helper:profiles!favors_helper_id_fkey(display_name),helped:profiles!favors_helped_id_fkey(display_name)")
+            .select("id,helper_id,helped_id,description,status,created_at,accepted_at,completed_at,transferred_at,coin_id,helper:profiles!favors_helper_id_fkey(display_name,avatar_url),helped:profiles!favors_helped_id_fkey(display_name,avatar_url)")
             .eq("helper_id", value: userId.uuidString)
             .order("created_at", ascending: false)
             .execute()
@@ -438,6 +458,7 @@ final class SupabaseService {
         let id: UUID
         let display_name: String?
         let created_at: String?
+        var avatar_url: String? = nil
         
         var displayName: String {
             display_name ?? "Unknown User"
@@ -448,7 +469,7 @@ final class SupabaseService {
     func searchUsers(query: String) async throws -> [UserProfile] {
         let response = try await client
             .from("profiles")
-            .select("id,display_name,created_at")
+            .select("id,display_name,created_at,avatar_url")
             .ilike("display_name", pattern: "%\(query)%")
             .limit(20)
             .execute()
@@ -457,6 +478,26 @@ final class SupabaseService {
     }
     
     /// Get users you've interacted with (exchanged favors with)
+    // MARK: - Profile photo (IOS_CONTRACT §11a)
+
+    /// Uploads a square 512×512 JPEG to avatars/{uid}/avatar.jpg (overwriting), then
+    /// records it with set_avatar. Returns the versioned public URL.
+    func uploadAvatar(jpeg: Data, userId: UUID) async throws -> String {
+        let path = "\(userId.uuidString.lowercased())/avatar.jpg"
+        try await client.storage.from("avatars")
+            .upload(path, data: jpeg, options: FileOptions(contentType: "image/jpeg", upsert: true))
+        struct Params: Encodable { let p_path: String }
+        let response = try await client
+            .rpc("set_avatar", params: Params(p_path: path))
+            .execute()
+        return try JSONDecoder().decode(String.self, from: response.data)
+    }
+
+    /// Back to initials (clear_avatar). The stored file is left; the column is the truth.
+    func clearAvatar() async throws {
+        _ = try await client.rpc("clear_avatar").execute()
+    }
+
     // MARK: - Push device tokens
 
     /// Registers this device's APNs token for the signed-in user (register_device).
@@ -535,7 +576,7 @@ final class SupabaseService {
 
         let profilesResponse = try await client
             .from("profiles")
-            .select("id,display_name,created_at")
+            .select("id,display_name,created_at,avatar_url")
             .in("id", values: otherIds.map(\.uuidString))
             .execute()
         return try JSONDecoder().decode([UserProfile].self, from: profilesResponse.data)
@@ -562,7 +603,7 @@ final class SupabaseService {
     func getUserProfile(userId: UUID) async throws -> UserProfile {
         let response = try await client
             .from("profiles")
-            .select("id,display_name,created_at")
+            .select("id,display_name,created_at,avatar_url")
             .eq("id", value: userId.uuidString)
             .single()
             .execute()
@@ -587,6 +628,7 @@ final class SupabaseService {
         
         struct ProfileName: Decodable {
             let display_name: String?
+            let avatar_url: String?
         }
         
         func toFavor() -> Favor {
@@ -602,7 +644,9 @@ final class SupabaseService {
                 transferred_at: transferred_at,
                 coin_id: coin_id,
                 helper_name: helper?.display_name,
-                helped_name: helped?.display_name
+                helped_name: helped?.display_name,
+                helper_avatar_url: helper?.avatar_url,
+                helped_avatar_url: helped?.avatar_url
             )
         }
     }

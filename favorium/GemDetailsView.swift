@@ -525,7 +525,10 @@ struct GemDetailView: View {
 
             // Content
             VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .firstTextBaseline) {
+                HStack(alignment: .center, spacing: 8) {
+                    // Who this step was with (photo or initials)
+                    let person = timelinePerson(item)
+                    PersonAvatar(userId: person.id, name: person.name, photo: person.photo, size: 24)
                     // Long names wrap rather than pushing the date off-screen
                     Text(transferLabel(item))
                         .font(.system(size: 15, weight: .semibold))
@@ -546,6 +549,15 @@ struct GemDetailView: View {
             }
             .padding(.bottom, isLast ? 0 : 20)
         }
+    }
+
+    /// The person to picture on a journey step: the other party on your own transfers,
+    /// otherwise the recipient (for "minted", that's the creator).
+    private func timelinePerson(_ item: SupabaseService.CoinHistoryItem) -> (id: UUID?, name: String?, photo: String?) {
+        if item.isToMe == true, item.eventType == "transferred" {
+            return (item.fromId, item.fromName, item.fromAvatar)
+        }
+        return (item.toId, item.toName, item.toAvatar)
     }
 
     private func transferLabel(_ item: SupabaseService.CoinHistoryItem) -> String {

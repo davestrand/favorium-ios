@@ -7,6 +7,8 @@
 //
 
 import SwiftUI
+import PhotosUI
+import UIKit
 
 // MARK: - Stats model
 
@@ -46,6 +48,11 @@ struct ProfileTabView: View {
     @State private var showSignOutConfirm = false
     @State private var stats = ProfileStatsModel()
     @State private var push = PushManager.shared
+    // Profile photo
+    @State private var showPhotoPicker = false
+    @State private var photoItem: PhotosPickerItem?
+    @State private var isSavingPhoto = false
+    @State private var photoError: String?
     @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
 
@@ -104,24 +111,47 @@ struct ProfileTabView: View {
 
     private var avatarSection: some View {
         VStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [FavoriumTheme.accent.opacity(0.4), FavoriumTheme.accentMuted.opacity(0.2)],
-                            startPoint: .topLeading, endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 88, height: 88)
-
-                Text(String(appVM.displayName.prefix(1)).uppercased())
-                    .font(.system(size: 36, weight: .bold, design: .serif))
-                    .foregroundColor(FavoriumTheme.ivory)
+            // Same avatar others see for you — tap to add or change your photo
+            Button { showPhotoPicker = true } label: {
+                PersonAvatar(userId: appVM.userId, name: appVM.displayName, photo: appVM.avatarURL, size: 88)
+                    .overlay {
+                        if isSavingPhoto {
+                            Circle().fill(.black.opacity(0.45))
+                            ProgressView().tint(FavoriumTheme.ivory)
+                        }
+                    }
+                    .overlay(alignment: .bottomTrailing) {
+                        Image(systemName: "camera.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(FavoriumTheme.onGold)
+                            .frame(width: 28, height: 28)
+                            .background(FavoriumTheme.goldGradient)
+                            .clipShape(Circle())
+                            .overlay(Circle().stroke(FavoriumTheme.background, lineWidth: 2))
+                    }
+                    .shadow(color: FavoriumTheme.accent.opacity(0.25), radius: 16)
             }
-            .overlay(
-                Circle().stroke(FavoriumTheme.accent.opacity(0.3), lineWidth: 1.5)
-            )
-            .shadow(color: FavoriumTheme.accent.opacity(0.25), radius: 16)
+            .buttonStyle(.plain)
+            .disabled(isSavingPhoto)
+            .accessibilityLabel(appVM.avatarURL == nil ? "Add profile photo" : "Change profile photo")
+
+            HStack(spacing: 16) {
+                Button(appVM.avatarURL == nil ? "Add photo" : "Change photo") { showPhotoPicker = true }
+                if appVM.avatarURL != nil {
+                    Button("Remove photo", role: .destructive) { removePhoto() }
+                        .foregroundColor(FavoriumTheme.ivoryDim)
+                }
+            }
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundColor(FavoriumTheme.accent)
+            .disabled(isSavingPhoto)
+
+            if let photoError {
+                Text(photoError)
+                    .font(FavoriumTheme.captionFont)
+                    .foregroundColor(FavoriumTheme.amber)
+                    .multilineTextAlignment(.center)
+            }
 
             VStack(spacing: 4) {
                 Text(appVM.displayName.isEmpty ? "Your name" : appVM.displayName)
@@ -139,6 +169,46 @@ struct ProfileTabView: View {
                 }
             }
             .accessibilityElement(children: .combine)
+        }
+        .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .images)
+        .onChange(of: photoItem) { _, item in
+            guard let item else { return }
+            savePhoto(item)
+        }
+    }
+
+    // MARK: - Photo upload (IOS_CONTRACT §11a)
+
+    private func savePhoto(_ item: PhotosPickerItem) {
+        guard let userId = appVM.userId else { return }
+        isSavingPhoto = true
+        photoError = nil
+        Task {
+            defer { isSavingPhoto = false; photoItem = nil }
+            do {
+                guard let data = try await item.loadTransferable(type: Data.self),
+                      let jpeg = AvatarImage.squareJPEG(from: data) else {
+                    photoError = "That photo couldn\u{2019}t be read. Try another one."
+                    return
+                }
+                appVM.avatarURL = try await SupabaseService.shared.uploadAvatar(jpeg: jpeg, userId: userId)
+            } catch {
+                photoError = "Couldn\u{2019}t save your photo: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    private func removePhoto() {
+        isSavingPhoto = true
+        photoError = nil
+        Task {
+            defer { isSavingPhoto = false }
+            do {
+                try await SupabaseService.shared.clearAvatar()
+                appVM.avatarURL = nil
+            } catch {
+                photoError = "Couldn\u{2019}t remove your photo: \(error.localizedDescription)"
+            }
         }
     }
 
@@ -297,4 +367,37 @@ struct ProfileTabView: View {
     ProfileTabView()
         .environment(appVM)
         .environment(authVM)
+}
+
+// MARK: - Avatar image processing
+
+/// Turns any picked photo into the contract's avatar format:
+/// a centre-cropped square, 512×512, JPEG, safely under the bucket's 1 MB limit.
+enum AvatarImage {
+    static let side: CGFloat = 512
+
+    static func squareJPEG(from data: Data) -> Data? {
+        guard let image = UIImage(data: data) else { return nil }
+        let size = image.size
+        let crop = min(size.width, size.height)
+        guard crop > 0 else { return nil }
+        // Draw so the centre square fills the 512×512 canvas
+        let scale = side / crop
+        let drawSize = CGSize(width: size.width * scale, height: size.height * scale)
+        let origin = CGPoint(x: (side - drawSize.width) / 2, y: (side - drawSize.height) / 2)
+
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1          // exactly 512×512 pixels, not points
+        format.opaque = true
+        let square = UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format).image { _ in
+            image.draw(in: CGRect(origin: origin, size: drawSize))
+        }
+        // Step quality down if needed to stay under the 1 MB limit
+        for quality in [0.85, 0.7, 0.55] {
+            if let jpeg = square.jpegData(compressionQuality: quality), jpeg.count < 900_000 {
+                return jpeg
+            }
+        }
+        return nil
+    }
 }

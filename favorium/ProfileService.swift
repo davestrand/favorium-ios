@@ -5,6 +5,7 @@ import Supabase
 nonisolated struct Profile: Decodable, Identifiable, Sendable {
     let id: UUID
     let display_name: String?
+    let avatar_url: String?
     let is_admin: Bool
     let created_at: Date
 }
@@ -33,7 +34,7 @@ final class ProfileService {
         // Use Supabase Swift's decoding directly to a Profile
         let profile: Profile = try await client
             .from("profiles")
-            .select("id, display_name, is_admin, created_at")
+            .select("id, display_name, avatar_url, is_admin, created_at")
             .eq("id", value: uid)
             .single()
             .execute()

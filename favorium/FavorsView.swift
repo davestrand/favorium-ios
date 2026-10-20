@@ -328,6 +328,9 @@ struct FavorsView: View {
                     // Done and confirmed — time to thank the helper with a gem
                     ForEach(vm.awaitingMyGem) { favor in
                         FavorStatusCard(
+                            personId: favor.helper_id,
+                            personName: favor.helper_name,
+                            personPhoto: favor.helper_avatar_url,
                             title: "\(favor.helper_name ?? "Someone") helped you",
                             description: favor.description,
                             badge: ("Give a gem", FavoriumTheme.gold),
@@ -343,6 +346,9 @@ struct FavorsView: View {
                     // Someone is helping me — confirm when it's done
                     ForEach(vm.helpingMe) { favor in
                         FavorStatusCard(
+                            personId: favor.helper_id,
+                            personName: favor.helper_name,
+                            personPhoto: favor.helper_avatar_url,
                             title: "\(favor.helper_name ?? "Someone") is helping you",
                             description: favor.description,
                             badge: ("In progress", FavoriumTheme.accent),
@@ -358,6 +364,9 @@ struct FavorsView: View {
                     // Favors I'm doing for others — only the other person can move these forward
                     ForEach(vm.myOffersInFlight) { favor in
                         FavorStatusCard(
+                            personId: favor.helped_id,
+                            personName: favor.helped_name,
+                            personPhoto: favor.helped_avatar_url,
                             title: "You're helping \(favor.helped_name ?? "someone")",
                             description: favor.description,
                             badge: helperWaitingBadge(favor),
@@ -446,7 +455,7 @@ struct FavorsView: View {
                 } else {
                     VStack(spacing: 8) {
                         ForEach(vm.historyItems) { favor in
-                            HistoryFavorRow(favor: favor)
+                            HistoryFavorRow(favor: favor, currentUserId: appVM.userId)
                                 .transition(.opacity)
                         }
                     }
@@ -529,14 +538,9 @@ private struct IncomingPendingCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
-                // Gem thumbnail (placeholder tier)
-                FavorGemView(
-                    gemFamily: .lightning,
-                    tier: .bloom,
-                    gemColor: FavoriumTheme.accent,
-                    size: 66,
-                    showGlow: false
-                )
+                // Who offered
+                PersonAvatar(userId: favor.helper_id, name: favor.helper_name,
+                             photo: favor.helper_avatar_url, size: 52)
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .firstTextBaseline) {
@@ -607,6 +611,10 @@ private struct FavorStatusCard: View {
         let perform: () -> Void
     }
 
+    /// The other person in the favor (shown as their avatar)
+    let personId: UUID
+    let personName: String?
+    let personPhoto: String?
     let title: String
     let description: String
     struct Cancel {
@@ -621,16 +629,19 @@ private struct FavorStatusCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(FavoriumTheme.ivory)
-                Text(description)
-                    .font(FavoriumTheme.bodyFont)
-                    .foregroundColor(FavoriumTheme.ivory.opacity(0.85))
-                    .lineLimit(2)
-                FavorStatusBadge(label: badge.0, color: badge.1)
-                    .padding(.top, 2)
+            HStack(alignment: .top, spacing: 12) {
+                PersonAvatar(userId: personId, name: personName, photo: personPhoto, size: 52)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(title)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(FavoriumTheme.ivory)
+                    Text(description)
+                        .font(FavoriumTheme.bodyFont)
+                        .foregroundColor(FavoriumTheme.ivory.opacity(0.85))
+                        .lineLimit(2)
+                    FavorStatusBadge(label: badge.0, color: badge.1)
+                        .padding(.top, 2)
+                }
             }
 
             if let action {
@@ -691,16 +702,17 @@ private struct FavorActionStyle: ViewModifier {
 
 private struct HistoryFavorRow: View {
     let favor: SupabaseService.Favor
+    let currentUserId: UUID?
+
+    private var iAmHelper: Bool { favor.helper_id == currentUserId }
+    /// The other person in the favor
+    private var otherId: UUID { iAmHelper ? favor.helped_id : favor.helper_id }
+    private var otherName: String? { iAmHelper ? favor.helped_name : favor.helper_name }
+    private var otherPhoto: String? { iAmHelper ? favor.helped_avatar_url : favor.helper_avatar_url }
 
     var body: some View {
         HStack(spacing: 12) {
-            FavorGemView(
-                gemFamily: .lightning,
-                tier: .legacy,
-                gemColor: rowGemColor,
-                size: 56,
-                showGlow: false
-            )
+            PersonAvatar(userId: otherId, name: otherName, photo: otherPhoto, size: 48)
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline) {
@@ -740,19 +752,16 @@ private struct HistoryFavorRow: View {
         )
     }
 
+    /// Written from the signed-in user's side: "You helped Sam" / "Sam helped you"
     private var rowHeadline: String {
-        // The Favor struct carries helper_name / helped_name from the joined profiles.
-        // We use the status to decide direction label; the caller already filters by
-        // historyFilter so context is known.
+        let other = otherName ?? (iAmHelper ? "someone" : "Someone")
         if favor.isCompleted || favor.isTransferred {
-            let helper = favor.helper_name ?? "Someone"
-            let helped = favor.helped_name ?? "someone"
-            // If the helper and helped are the same person this shouldn't happen,
-            // but we present the most natural description either way.
-            return "\(helper) helped \(helped)"
+            return iAmHelper ? "You helped \(other)" : "\(other) helped you"
         }
-        if favor.isDeclined { return "Favor declined" }
-        if favor.isCancelled { return "Favor cancelled" }
+        if favor.isDeclined {
+            return iAmHelper ? "\(other) declined your offer" : "You declined \(other)\u{2019}s offer"
+        }
+        if favor.isCancelled { return iAmHelper ? "Favor with \(other) cancelled" : "\(other)\u{2019}s favor cancelled" }
         return "Past favor"
     }
 
@@ -761,13 +770,6 @@ private struct HistoryFavorRow: View {
         if favor.isDeclined    { return ("Declined", "xmark.circle") }
         if favor.isCancelled   { return ("Cancelled", "minus.circle") }
         return ("Completed", "checkmark.circle")
-    }
-
-    private var rowGemColor: Color {
-        // Derive a deterministic hue from the favor UUID so the same
-        // favor always shows the same gem tint — no randomness at render time.
-        let hue = Double(favor.id.hashValue & 0xFFFF) / Double(0xFFFF)
-        return Color(hue: hue, saturation: 0.65, brightness: 0.88)
     }
 
     private var rowDate: String {

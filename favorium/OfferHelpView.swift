@@ -71,7 +71,8 @@ final class OfferHelpViewModel {
                     ?? SupabaseService.UserProfile(
                         id: otherId,
                         display_name: iAmHelper ? favor.helped_name : favor.helper_name,
-                        created_at: nil
+                        created_at: nil,
+                        avatar_url: iAmHelper ? favor.helped_avatar_url : favor.helper_avatar_url
                     )
             }
 
@@ -207,7 +208,7 @@ struct OfferHelpView: View {
 
             if let chosen = vm.recipient {
                 HStack {
-                    initialBadge(chosen.displayName, fill: FavoriumTheme.accent.opacity(0.3))
+                    PersonAvatar(userId: chosen.id, name: chosen.displayName, photo: chosen.avatar_url, size: 28)
                     Text(chosen.displayName)
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(FavoriumTheme.ivory)
@@ -279,15 +280,7 @@ struct OfferHelpView: View {
                     ForEach(recent) { person in
                         Button { choose(person) } label: {
                             VStack(spacing: 6) {
-                                Circle()
-                                    .fill(FavoriumTheme.accent.opacity(0.18))
-                                    .frame(width: 52, height: 52)
-                                    .overlay(
-                                        Text(String(person.displayName.prefix(1)).uppercased())
-                                            .font(.system(size: 20, weight: .bold, design: .serif))
-                                            .foregroundColor(FavoriumTheme.accent)
-                                    )
-                                    .overlay(Circle().stroke(FavoriumTheme.accent.opacity(0.4), lineWidth: 1))
+                                PersonAvatar(userId: person.id, name: person.displayName, photo: person.avatar_url, size: 52)
                                 Text(person.displayName)
                                     .font(.system(size: 12))
                                     .foregroundColor(FavoriumTheme.ivory)
@@ -318,7 +311,7 @@ struct OfferHelpView: View {
             ForEach(people) { user in
                 Button { choose(user) } label: {
                     HStack {
-                        initialBadge(user.displayName, fill: FavoriumTheme.accentMuted.opacity(0.3))
+                        PersonAvatar(userId: user.id, name: user.displayName, photo: user.avatar_url, size: 28)
                         Text(user.displayName)
                             .font(.system(size: 15))
                             .foregroundColor(FavoriumTheme.ivory)
@@ -344,17 +337,6 @@ struct OfferHelpView: View {
             vm.searchQuery = ""
             vm.searchResults = []
         }
-    }
-
-    private func initialBadge(_ name: String, fill: Color) -> some View {
-        Circle()
-            .fill(fill)
-            .frame(width: 28, height: 28)
-            .overlay(
-                Text(String(name.prefix(1)).uppercased())
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(FavoriumTheme.accent)
-            )
     }
 
     // MARK: - Message field
