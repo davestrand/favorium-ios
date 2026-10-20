@@ -59,7 +59,7 @@ struct ProfileTabView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                FavoriumTheme.background.ignoresSafeArea()
+                DecoBackdrop()
 
                 ScrollView {
                     VStack(spacing: 0) {

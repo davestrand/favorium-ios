@@ -21,7 +21,7 @@ struct CollectionView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                FavoriumTheme.background.ignoresSafeArea()
+                DecoBackdrop()
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
@@ -80,40 +80,26 @@ struct CollectionView: View {
     // MARK: - Header
 
     private var headerView: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 2) {
-                // Decorative arc + stars via overlay
-                ZStack(alignment: .leading) {
-                    // Subtle arc glow — use relative sizing so it never overflows
-                    Ellipse()
-                        .fill(
-                            RadialGradient(
-                                colors: [FavoriumTheme.accent.opacity(0.08), .clear],
-                                center: .center, startRadius: 5, endRadius: 180
-                            )
-                        )
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 80)
-                        .blur(radius: 18)
-                        .offset(x: 0, y: -10)
-                        .clipped()
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Favorium")
-                            .font(FavoriumTheme.titleFont)
-                            .foregroundColor(FavoriumTheme.ivory)
-                        subtitleLine
-                    }
-                }
-            }
-            Spacer()
+        // Centered under the backdrop's gold arch, matching Favors and Profile
+        VStack(spacing: 8) {
+            Text("Favorium")
+                .font(FavoriumTheme.titleFont)
+                .foregroundColor(FavoriumTheme.ivory)
+                .decoTitle()
+                .shadow(color: FavoriumTheme.sapphire.opacity(0.6), radius: 12)
+            DecoDivider()
+            subtitleLine
+        }
+        .frame(maxWidth: .infinity)
+        .overlay(alignment: .topTrailing) {
             // Settings gear (placeholder — preserves room for future nav)
             Image(systemName: "gearshape")
                 .font(.system(size: 20, weight: .light))
                 .foregroundColor(FavoriumTheme.ivoryDim)
                 .padding(.top, 6)
         }
-        .padding(.top, 56) // below status bar
+        .padding(.top, 36) // below status bar; subtitle clears the backdrop arch
+        .padding(.bottom, 16)
     }
 
     @ViewBuilder

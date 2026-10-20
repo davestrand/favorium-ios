@@ -190,7 +190,7 @@ struct FavorsView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                FavoriumTheme.background.ignoresSafeArea()
+                DecoBackdrop()
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {

@@ -76,7 +76,7 @@ struct ContentView: View {
                 .environment(appVM)
                 .tag(Tab.collection)
                 .tabItem {
-                    Label("Collection", systemImage: "diamond")
+                    Label("Collection", image: tabIcon(.collection, "tab_collection"))
                 }
 
             FavorsView()
@@ -84,7 +84,7 @@ struct ContentView: View {
                 .tag(Tab.favors)
                 .badge(notifications.actionCount)
                 .tabItem {
-                    Label("Favors", systemImage: "heart")
+                    Label("Favors", image: tabIcon(.favors, "tab_favors"))
                 }
 
             ProfileTabView()
@@ -92,7 +92,7 @@ struct ContentView: View {
                 .environment(authVM)
                 .tag(Tab.profile)
                 .tabItem {
-                    Label("Profile", systemImage: "person")
+                    Label("Profile", image: tabIcon(.profile, "tab_profile"))
                 }
         }
         .tint(FavoriumTheme.accent)
@@ -117,11 +117,17 @@ struct ContentView: View {
         .sensoryFeedback(.success, trigger: notifications.banner) { _, new in new != nil }
     }
 
+    /// Gem-cut tab glyph from the asset catalog; the selected tab gets the "lit"
+    /// variant with translucent facets.
+    private func tabIcon(_ tab: Tab, _ name: String) -> String {
+        selectedTab == tab ? name + "_fill" : name
+    }
+
     // MARK: - Splash
 
     private var splashView: some View {
         ZStack {
-            FavoriumTheme.background.ignoresSafeArea()
+            DecoBackdrop()
             VStack(spacing: 16) {
                 FavorGemView(
                     gemFamily: .lightning,
@@ -133,6 +139,8 @@ struct ContentView: View {
                 Text("Favorium")
                     .font(FavoriumTheme.titleFont)
                     .foregroundColor(FavoriumTheme.ivory)
+                    .decoTitle()
+                DecoDivider()
             }
         }
     }
@@ -148,18 +156,21 @@ struct ContentView: View {
 
 // MARK: - Theme
 
-/// Centralized design tokens for the Favorium "midnight velvet & gold" aesthetic —
-/// a velvet-lined jewelry case: deep plum-navy backgrounds, brushed-gold actions,
-/// champagne accents and lavender-silver secondary text.
+/// Centralized design tokens for the Favorium "Sovereign" aesthetic — art-deco
+/// sci-fi: midnight-navy halls lit by sapphire light rays, polished gold metal,
+/// and platinum-silver secondary text.
 enum FavoriumTheme {
     // Colors
-    static let background   = Color(red: 0.086, green: 0.039, blue: 0.149)  // #160A26 deep violet velvet
-    static let surface      = Color(red: 0.141, green: 0.078, blue: 0.227)  // #24143A plum panel
-    static let surfaceHigh  = Color(red: 0.200, green: 0.125, blue: 0.310)  // #33204F raised panel
-    static let accent       = Color(red: 0.961, green: 0.788, blue: 0.353)  // #F5C95A rich gold
-    static let accentMuted  = Color(red: 0.722, green: 0.576, blue: 0.247)  // #B8933F antique gold (spines, borders)
-    static let silver       = Color(red: 0.765, green: 0.706, blue: 0.871)  // #C3B4DE lavender silver
-    static let ivory        = Color(red: 0.965, green: 0.945, blue: 0.906)  // #F6F1E7 warm ivory
+    static let background   = Color(red: 0.020, green: 0.039, blue: 0.110)  // #050A1C midnight navy
+    static let backgroundTop = Color(red: 0.035, green: 0.078, blue: 0.200) // #091433 deep sapphire (top of backdrop)
+    static let surface      = Color(red: 0.051, green: 0.102, blue: 0.227)  // #0D1A3A navy panel
+    static let surfaceHigh  = Color(red: 0.086, green: 0.149, blue: 0.310)  // #16264F raised panel
+    static let accent       = Color(red: 0.910, green: 0.722, blue: 0.290)  // #E8B84A polished gold
+    static let accentMuted  = Color(red: 0.663, green: 0.510, blue: 0.184)  // #A9822F antique gold (spines, borders)
+    static let silver       = Color(red: 0.788, green: 0.827, blue: 0.902)  // #C9D3E6 platinum silver
+    static let sapphire     = Color(red: 0.239, green: 0.482, blue: 1.000)  // #3D7BFF electric sapphire
+    static let sapphireGlow = Color(red: 0.776, green: 0.867, blue: 1.000)  // #C6DDFF pale ray light
+    static let ivory        = Color(red: 0.957, green: 0.937, blue: 0.890)  // #F4EFE3 warm ivory
     static let ivoryDim     = silver                                         // secondary text
     static let gold         = Color(red: 0.85, green: 0.65, blue: 0.20)
     static let amber        = Color(red: 0.90, green: 0.60, blue: 0.10)
@@ -179,8 +190,9 @@ enum FavoriumTheme {
     static let onGold       = Color(red: 0.16, green: 0.10, blue: 0.05)
 
     // Fonts
-    static let titleFont    = Font.system(size: 36, weight: .bold, design: .serif)
-    static let headingFont  = Font.system(size: 22, weight: .semibold, design: .default)
+    // Expanded-width geometric sans for the deco marquee look
+    static let titleFont    = Font.system(size: 30, weight: .light).width(.expanded)
+    static let headingFont  = Font.system(size: 20, weight: .medium).width(.expanded)
     static let bodyFont     = Font.system(size: 16, weight: .regular, design: .default)
     static let captionFont  = Font.system(size: 13, weight: .regular, design: .default)
 
@@ -221,31 +233,16 @@ struct StarfieldHeader: View {
     let subtitle: String
 
     var body: some View {
-        ZStack {
-            // Subtle arc glow behind the header
-            Ellipse()
-                .fill(
-                    RadialGradient(
-                        colors: [FavoriumTheme.accent.opacity(0.10), .clear],
-                        center: .center,
-                        startRadius: 10,
-                        endRadius: 200
-                    )
-                )
-                .frame(maxWidth: .infinity)
-                .frame(height: 140)
-                .clipped()
-                .offset(y: -10)
-                .blur(radius: 20)
-
-            VStack(spacing: 4) {
-                Text(title)
-                    .font(FavoriumTheme.titleFont)
-                    .foregroundColor(FavoriumTheme.ivory)
-                Text(subtitle)
-                    .font(FavoriumTheme.captionFont)
-                    .foregroundColor(FavoriumTheme.ivoryDim)
-            }
+        VStack(spacing: 8) {
+            Text(title)
+                .font(FavoriumTheme.titleFont)
+                .foregroundColor(FavoriumTheme.ivory)
+                .decoTitle()
+                .shadow(color: FavoriumTheme.sapphire.opacity(0.6), radius: 12)
+            DecoDivider()
+            Text(subtitle)
+                .font(FavoriumTheme.captionFont)
+                .foregroundColor(FavoriumTheme.ivoryDim)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 8)
