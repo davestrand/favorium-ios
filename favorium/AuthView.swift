@@ -100,8 +100,7 @@ struct AuthView: View {
                 gemFamily: .lightning,
                 tier: .legacy,
                 gemColor: FavoriumTheme.accent,
-                size: 96,
-                showGlow: true
+                size: 96
             )
             .accessibilityHidden(true)
 
@@ -109,12 +108,12 @@ struct AuthView: View {
                 .font(FavoriumTheme.titleFont)
                 .foregroundColor(FavoriumTheme.ivory)
                 .decoTitle()
-                .shadow(color: FavoriumTheme.sapphire.opacity(0.6), radius: 12)
                 .accessibilityAddTraits(.isHeader)
             DecoDivider()
             Text("Kindness in motion.")
                 .font(FavoriumTheme.captionFont)
-                .foregroundColor(FavoriumTheme.ivoryDim)
+                .foregroundColor(FavoriumTheme.ivory)
+                .backdropLegible()
         }
     }
 

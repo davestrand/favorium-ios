@@ -75,7 +75,7 @@ extension FavorGemView {
         )
     }
 
-    /// Optimized for grid cells — glow on, shimmer off.
+    /// Optimized for grid cells — no glow (reserved for Gem Details), shimmer off.
     static func gridItem(model: CrystalModel, size: CGFloat = 100) -> some View {
         FavorGemView(
             gemFamily: model.assetGemFamily,
@@ -83,12 +83,12 @@ extension FavorGemView {
             gemColor: model.primarySwiftUIColor,
             frameColor: nil,
             size: size,
-            showGlow: true,
+            showGlow: false,
             showShimmer: false
         )
     }
 
-    /// Optimized for card display — all effects on.
+    /// Optimized for card display — shimmer on, no glow (reserved for Gem Details).
     static func card(model: CrystalModel, size: CGFloat = 160) -> some View {
         FavorGemView(
             gemFamily: model.assetGemFamily,
@@ -96,7 +96,7 @@ extension FavorGemView {
             gemColor: model.primarySwiftUIColor,
             frameColor: nil,
             size: size,
-            showGlow: true,
+            showGlow: false,
             showShimmer: true
         )
     }

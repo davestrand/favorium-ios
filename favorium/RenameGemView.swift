@@ -67,7 +67,7 @@ struct RenameGemView: View {
                     }
                     .padding(.top, 16)
 
-                    FavorGemView(dna: dna, transferCount: transferCount, size: 150, showGlow: true)
+                    FavorGemView(dna: dna, transferCount: transferCount, size: 150)
                         .frame(height: 170)
 
                     Text("You created this gem, so its name is yours to give. It travels with the gem through every favor.")

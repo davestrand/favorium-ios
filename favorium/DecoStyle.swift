@@ -171,11 +171,33 @@ extension View {
         modifier(FadeInOnFirstAppear())
     }
 
-    /// Wide-tracked uppercase treatment for deco headings.
+    /// Wide-tracked uppercase treatment for deco headings, with a sapphire glow
+    /// and a tight outline so it stays legible over the backdrop's rays.
     func decoTitle() -> some View {
         self
             .textCase(.uppercase)
             .tracking(6)
+            .shadow(color: FavoriumTheme.sapphire.opacity(0.6), radius: 12)
+            .backdropLegible()
+    }
+
+    /// Tight background-colored shadow that outlines text sitting on the busy
+    /// upper part of `DecoBackdrop`. Adapts to light and dark appearance.
+    func backdropLegible() -> some View {
+        shadow(color: FavoriumTheme.background.opacity(0.85), radius: 2, y: 1)
+    }
+
+    /// Soft pool of background color behind a header block, dimming the rays and
+    /// gold arch right where the title and subtitle sit.
+    func backdropHalo() -> some View {
+        background {
+            Ellipse()
+                .fill(FavoriumTheme.background.opacity(0.75))
+                .padding(.horizontal, -20)
+                .padding(.vertical, -6)
+                .blur(radius: 22)
+                .accessibilityHidden(true)
+        }
     }
 }
 
@@ -190,8 +212,17 @@ extension View {
             DecoDivider()
             Text("Kindness in motion.")
                 .font(FavoriumTheme.captionFont)
-                .foregroundStyle(FavoriumTheme.silver)
+                .foregroundStyle(FavoriumTheme.ivory)
+                .backdropLegible()
         }
     }
 }
 
+
+#Preview("Tab header") {
+    ZStack(alignment: .top) {
+        DecoBackdrop()
+        StarfieldHeader(title: "Favorium", subtitle: "2 gems, saved for your next thank-you")
+            .padding(.top, 36)
+    }
+}

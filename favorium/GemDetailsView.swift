@@ -167,15 +167,8 @@ struct GemDetailView: View {
 
             Spacer()
 
-            // Placeholder for future share/menu action
-            Button { } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(FavoriumTheme.ivory)
-                    .frame(width: 40, height: 40)
-                    .background(FavoriumTheme.surface)
-                    .clipShape(Circle())
-            }
+            // Balances the close button so the title stays centred
+            Color.clear.frame(width: 40, height: 40)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)

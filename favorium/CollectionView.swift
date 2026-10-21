@@ -100,18 +100,12 @@ struct CollectionView: View {
                 .font(FavoriumTheme.titleFont)
                 .foregroundColor(FavoriumTheme.ivory)
                 .decoTitle()
-                .shadow(color: FavoriumTheme.sapphire.opacity(0.6), radius: 12)
             DecoDivider()
             subtitleLine
+                .backdropLegible()
         }
+        .backdropHalo()
         .frame(maxWidth: .infinity)
-        .overlay(alignment: .topTrailing) {
-            // Settings gear (placeholder — preserves room for future nav)
-            Image(systemName: "gearshape")
-                .font(.system(size: 20, weight: .light))
-                .foregroundColor(FavoriumTheme.ivoryDim)
-                .padding(.top, 6)
-        }
         .padding(.top, 36) // below status bar; subtitle clears the backdrop arch
         .padding(.bottom, 16)
     }
@@ -130,11 +124,11 @@ struct CollectionView: View {
             let count = vm.held.count
             Text(count == 1 ? "1 gem, saved for your next thank-you" : "\(count) gems, saved for your next thank-you")
                 .font(FavoriumTheme.captionFont)
-                .foregroundColor(FavoriumTheme.ivoryDim)
+                .foregroundColor(FavoriumTheme.ivory)
         default:
             Text("Your collection")
                 .font(FavoriumTheme.captionFont)
-                .foregroundColor(FavoriumTheme.ivoryDim)
+                .foregroundColor(FavoriumTheme.ivory)
         }
     }
 
@@ -309,8 +303,7 @@ private struct GemGridCell: View {
                         FavorGemView(
                             dna: resolvedDNA,
                             transferCount: transferCount,
-                            size: 110,
-                            showGlow: true
+                            size: 110
                         )
                     }
                     .frame(maxWidth: .infinity)

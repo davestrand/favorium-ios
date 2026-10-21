@@ -133,7 +133,7 @@ struct ContentView: View {
                     tier: .legacy,
                     gemColor: FavoriumTheme.accent,
                     size: 120,
-                    showGlow: true
+                    trait: .rainbow
                 )
                 Text("Favorium")
                     .font(FavoriumTheme.titleFont)
@@ -216,7 +216,7 @@ enum FavoriumTheme {
 
     // Fonts
     // Expanded-width geometric sans for the deco marquee look
-    static let titleFont    = Font.system(size: 30, weight: .light).width(.expanded)
+    static let titleFont    = Font.system(size: 30, weight: .regular).width(.expanded)
     static let headingFont  = Font.system(size: 20, weight: .medium).width(.expanded)
     static let bodyFont     = Font.system(size: 16, weight: .regular, design: .default)
     static let captionFont  = Font.system(size: 13, weight: .regular, design: .default)
@@ -272,12 +272,13 @@ struct StarfieldHeader: View {
                 .font(FavoriumTheme.titleFont)
                 .foregroundColor(FavoriumTheme.ivory)
                 .decoTitle()
-                .shadow(color: FavoriumTheme.sapphire.opacity(0.6), radius: 12)
             DecoDivider()
             Text(subtitle)
                 .font(FavoriumTheme.captionFont)
-                .foregroundColor(FavoriumTheme.ivoryDim)
+                .foregroundColor(FavoriumTheme.ivory)
+                .backdropLegible()
         }
+        .backdropHalo()
         .frame(maxWidth: .infinity)
         .padding(.top, 8)
         .padding(.bottom, 16)

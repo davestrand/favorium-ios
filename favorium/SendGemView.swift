@@ -298,7 +298,7 @@ struct SendGemView: View {
                         withAnimation(.easeInOut(duration: 0.2)) { vm.gem = gem }
                     } label: {
                         HStack(spacing: 14) {
-                            gemImage(gem, size: 46, showGlow: false)
+                            gemImage(gem, size: 46, animated: false)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(gem.name)
                                     .font(.system(size: 15, weight: .semibold))
@@ -325,13 +325,13 @@ struct SendGemView: View {
         gem.dna?.gemColor ?? Tier.from(transferCount: gem.transferCount).defaultColor
     }
 
-    private func gemImage(_ gem: GiftableGem, size: CGFloat, showGlow: Bool) -> some View {
+    /// The outer glow is reserved for Gem Details; `animated` keeps the shimmer on the featured gem.
+    private func gemImage(_ gem: GiftableGem, size: CGFloat, animated: Bool) -> some View {
         FavorGemView(
             dna: gem.dna,
             transferCount: gem.transferCount,
             size: size,
-            showGlow: showGlow,
-            showShimmer: showGlow
+            showShimmer: animated
         )
     }
 
@@ -348,7 +348,7 @@ struct SendGemView: View {
                 .blur(radius: 20)
 
                 // Same renderer as the detail page so the gem looks identical
-                gemImage(gem, size: 180, showGlow: true)
+                gemImage(gem, size: 180, animated: true)
             }
             .frame(height: 220)
             Text(gem.name)
