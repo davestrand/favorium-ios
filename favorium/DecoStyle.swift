@@ -147,7 +147,30 @@ struct DecoDivider: View {
     }
 }
 
+/// Fades content in the first time it appears, such as a tab's first visit.
+/// State lives with the view, so returning to an already-visited tab doesn't replay it.
+private struct FadeInOnFirstAppear: ViewModifier {
+    @State private var visible = false
+
+    func body(content: Content) -> some View {
+        content
+            // Scoped so only the opacity animates, never the content's layout
+            .animation(.easeInOut(duration: 0.9)) { $0.opacity(visible ? 1 : 0) }
+            .task {
+                // Let the transparent first frame render; flipping `visible` in
+                // onAppear lands in that same frame and skips the fade entirely.
+                try? await Task.sleep(for: .milliseconds(60))
+                visible = true
+            }
+    }
+}
+
 extension View {
+    /// Fades this view in on its first appearance.
+    func fadeInOnFirstAppear() -> some View {
+        modifier(FadeInOnFirstAppear())
+    }
+
     /// Wide-tracked uppercase treatment for deco headings.
     func decoTitle() -> some View {
         self

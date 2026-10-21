@@ -15,6 +15,9 @@ struct CollectionView: View {
     @State private var vm = CollectionViewModel()
     @State private var selectedCoin: SupabaseService.CoinSummary?
     @State private var showSendPicker = false
+    /// Flips just after the first load lands so gems fade in one after another
+    /// instead of popping in. Stays true, so lazily re-created cells show immediately.
+    @State private var gemsRevealed = false
 
     private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
 
@@ -40,6 +43,7 @@ struct CollectionView: View {
                         // ── Give a gem CTA (only when a completed favor is waiting for one) ───
                         if !vm.held.isEmpty && !vm.favorsAwaitingGem.isEmpty {
                             sendCTAButton
+                                .fadeInOnFirstAppear()
                                 .padding(.horizontal, 16)
                                 .padding(.bottom, 32)
                         }
@@ -52,6 +56,8 @@ struct CollectionView: View {
                     }
                     .frame(maxWidth: .infinity)  // anchor the VStack to scroll view width
                 }
+                // Content fades in over the fixed backdrop on the tab's first visit
+                .fadeInOnFirstAppear()
                 .refreshable {
                     if let uid = appVM.userId {
                         await vm.load(userId: uid)
@@ -59,6 +65,14 @@ struct CollectionView: View {
                 }
             }
             .navigationBarHidden(true)
+            .onChange(of: vm.loadState) { _, state in
+                guard case .loaded = state, !gemsRevealed else { return }
+                Task {
+                    // Let the cells render transparent first, or the fade is skipped
+                    try? await Task.sleep(for: .milliseconds(60))
+                    gemsRevealed = true
+                }
+            }
             // Live updates: a gem received or a favor completed elsewhere shows up immediately
             .onChange(of: notifications.changeToken) { _, _ in
                 if let uid = appVM.userId { Task { await vm.load(userId: uid) } }
@@ -105,12 +119,18 @@ struct CollectionView: View {
     @ViewBuilder
     private var subtitleLine: some View {
         switch vm.loadState {
-        case .loaded:
-            let readyCount = vm.held.count
-            let label = readyCount == 1 ? "1 gem ready to give" : "\(readyCount) gems ready to give"
-            Text(label)
+        case .loaded where !vm.favorsAwaitingGem.isEmpty:
+            // Someone finished helping — the one moment a gem can actually be given
+            let owed = vm.favorsAwaitingGem.count
+            Text(owed == 1 ? "1 favor to thank with a gem" : "\(owed) favors to thank with a gem")
                 .font(FavoriumTheme.captionFont)
                 .foregroundColor(FavoriumTheme.accent)
+        case .loaded where !vm.held.isEmpty:
+            // Gems wait here until someone helps you
+            let count = vm.held.count
+            Text(count == 1 ? "1 gem, saved for your next thank-you" : "\(count) gems, saved for your next thank-you")
+                .font(FavoriumTheme.captionFont)
+                .foregroundColor(FavoriumTheme.ivoryDim)
         default:
             Text("Your collection")
                 .font(FavoriumTheme.captionFont)
@@ -138,13 +158,19 @@ struct CollectionView: View {
                     emptyHeld
                 } else {
                     LazyVGrid(columns: columns, spacing: 12) {
-                        ForEach(vm.held) { coin in
+                        ForEach(Array(vm.held.enumerated()), id: \.element.id) { index, coin in
                             GemGridCell(
                                 coin: coin,
                                 isOriginal: coin.creator_id == appVM.userId,
                                 story: vm.storyByCoin[coin.id],
                                 onTap: { selectedCoin = coin }
                             )
+                            // Staggered reveal (capped so off-screen gems don't wait long);
+                            // scoped so only opacity and scale animate, never grid layout
+                            .animation(.easeOut(duration: 0.6).delay(Double(min(index, 8)) * 0.08)) {
+                                $0.opacity(gemsRevealed ? 1 : 0)
+                                    .scaleEffect(gemsRevealed ? 1 : 0.94)
+                            }
                             .transition(.scale(scale: 0.92).combined(with: .opacity))
                         }
                     }
@@ -241,6 +267,7 @@ struct CollectionView: View {
                     }
                 }
             }
+            .fadeInOnFirstAppear()
         }
     }
 

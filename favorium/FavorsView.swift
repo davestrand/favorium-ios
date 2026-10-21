@@ -182,10 +182,14 @@ struct FavorsView: View {
     @State private var showOfferHelp = false
     @State private var push = PushManager.shared
     @AppStorage("pushPromptDismissed") private var pushPromptDismissed = false
+    /// Off until the first load lands, so initial content replaces the placeholders
+    /// in place instead of every card sliding in at once. Live changes after that animate.
+    @State private var animatesChanges = false
     /// Favor the user is giving a gem for (opens the give-a-gem sheet)
     @State private var givingGemFor: SupabaseService.Favor?
     /// Favor awaiting cancel confirmation
     @State private var cancelling: SupabaseService.Favor?
+    @State private var showConnect = false
 
     var body: some View {
         NavigationStack {
@@ -200,19 +204,30 @@ struct FavorsView: View {
                             .padding(.top, 28)
                             .padding(.bottom, 8)
 
-                        // ── Offer help (starts a new favor) ────────────
-                        Button { showOfferHelp = true } label: {
-                            HStack {
-                                Image(systemName: "hand.raised")
-                                Text("Offer help")
+                        // ── Start a favor / pair with someone ──────────
+                        HStack(spacing: 12) {
+                            Button { showOfferHelp = true } label: {
+                                Label("Offer a favor", systemImage: "hand.raised")
                                     .fontWeight(.semibold)
-                                Spacer()
-                                Image(systemName: "chevron.right")
+                                    .lineLimit(1)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
+                                    .metallicGoldCapsule()
                             }
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 16)
-                            .metallicGoldCapsule()
+
+                            Button { showConnect = true } label: {
+                                Label("Connect", systemImage: "person.2")
+                                    .fontWeight(.semibold)
+                                    .lineLimit(1)
+                                    .foregroundColor(FavoriumTheme.accent)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
+                                    .background(FavoriumTheme.surface.opacity(0.85))
+                                    .clipShape(Capsule())
+                                    .overlay(Capsule().strokeBorder(FavoriumTheme.goldGradient, lineWidth: 1.5))
+                            }
                         }
+                        .buttonStyle(.plain)
                         .padding(.horizontal, 16)
                         .padding(.bottom, 24)
 
@@ -244,16 +259,23 @@ struct FavorsView: View {
                             .padding(.bottom, 40)
                     }
                 }
+                // Content fades in over the fixed backdrop on the tab's first visit
+                .fadeInOnFirstAppear()
                 .refreshable {
                     if let uid = appVM.userId {
                         await vm.load(userId: uid)
                         await notifications.refreshActionCount()
                     }
                 }
-                .animation(.easeInOut(duration: 0.35), value: vm.hasPending)
+                .animation(animatesChanges ? .easeInOut(duration: 0.35) : nil, value: vm.hasPending)
                 // New or resolved favors slide in/out instead of popping
-                .animation(.spring(response: 0.45, dampingFraction: 0.85), value: vm.pendingIDs)
-                .animation(.easeInOut(duration: 0.4), value: vm.loadState)
+                .animation(animatesChanges ? .spring(response: 0.45, dampingFraction: 0.85) : nil, value: vm.pendingIDs)
+                // The prompt card collapses smoothly once permission is granted or dismissed
+                .animation(.easeInOut(duration: 0.3), value: push.canAskPermission && !pushPromptDismissed)
+            }
+            .onChange(of: vm.loadState) { _, state in
+                // Runs after the first loaded render, so only later changes animate
+                if state == .loaded { animatesChanges = true }
             }
             .navigationBarHidden(true)
             .task {
@@ -263,6 +285,9 @@ struct FavorsView: View {
             }
             // Live updates: reload whenever a favor changes elsewhere
             .onChange(of: notifications.changeToken) { _, _ in reload() }
+            .sheet(isPresented: $showConnect) {
+                ConnectView(userId: appVM.userId)
+            }
             .sheet(isPresented: $showOfferHelp) {
                 OfferHelpView(userId: appVM.userId) { reload() }
             }

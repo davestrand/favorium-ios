@@ -41,11 +41,13 @@ final class AppViewModel {
         isAuthenticated = true
         email = session.email ?? ""
 
-        // The profile row is the source of truth for the name; fall back to the
-        // name given at sign-up so the Profile tab never shows a blank.
-        let profile = try? await ProfileService.shared.me()
+        // The profile row is the source of truth for the name and photo; fall back to
+        // the name given at sign-up so the Profile tab never shows a blank.
+        // Read through the same client that signed in, with the lenient decoder the
+        // other screens use — a strict decode failure here used to drop the photo silently.
+        let profile = try? await SupabaseService.shared.getUserProfile(userId: id)
         let profileName = profile?.display_name
-        avatarURL = profile?.avatar_url
+        avatarURL = profile?.avatar_url.flatMap { $0.isEmpty ? nil : $0 }
         displayName = [profileName, session.signUpDisplayName]
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .first { !$0.isEmpty } ?? ""

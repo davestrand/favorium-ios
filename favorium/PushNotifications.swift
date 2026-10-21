@@ -23,6 +23,9 @@ final class PushManager: NSObject {
     enum Route: String { case favors, collection }
 
     private(set) var authorizationStatus: UNAuthorizationStatus = .notDetermined
+    /// False until the first settings read, so UI doesn't mistake the default
+    /// `.notDetermined` for "never asked" and flash the permission prompt.
+    private(set) var hasCheckedAuthorization = false
     /// Set when the user taps a push; ContentView consumes it and switches tabs
     var pendingRoute: Route?
     /// Called when a push arrives while the app is open (wired up by ContentView)
@@ -44,11 +47,12 @@ final class PushManager: NSObject {
 
     // MARK: - Permission
 
-    var canAskPermission: Bool { authorizationStatus == .notDetermined }
+    var canAskPermission: Bool { hasCheckedAuthorization && authorizationStatus == .notDetermined }
 
     @MainActor
     func refreshAuthorizationStatus() async {
         authorizationStatus = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        hasCheckedAuthorization = true
     }
 
     /// Shows the system prompt (once) and registers with APNs if allowed.

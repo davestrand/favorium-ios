@@ -582,6 +582,116 @@ final class SupabaseService {
         return try JSONDecoder().decode([UserProfile].self, from: profilesResponse.data)
     }
 
+    // MARK: - Pairing (PAIRING_CONTRACT)
+    // Codes are created and redeemed only through the two SECURITY DEFINER RPCs;
+    // neither `pairing_codes` nor `connections` accepts client writes.
+
+    /// A short-lived invitation. `code` is the primary key; `expires_at` is the authority.
+    struct PairingCode: Decodable, Equatable, Sendable {
+        let code: String
+        let expires_at: String
+
+        var expiresAt: Date? { Self.parseTimestamp(expires_at) }
+
+        /// Postgres timestamps arrive with or without fractional seconds.
+        static func parseTimestamp(_ raw: String) -> Date? {
+            let fractional = ISO8601DateFormatter()
+            fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            return fractional.date(from: raw) ?? ISO8601DateFormatter().date(from: raw)
+        }
+    }
+
+    /// Someone you are paired with: one `connections` row resolved to the other person.
+    struct CircleMember: Identifiable, Sendable {
+        let id: UUID            // the other person's user id
+        let displayName: String
+        let avatarURL: String?
+        let pairedAt: String    // connections.created_at — the pairing date
+    }
+
+    /// Creates a fresh code, expiring any live one you already hold.
+    func createPairingCode() async throws -> PairingCode {
+        let response = try await client.rpc("create_pairing_code").execute()
+        // Returned as a single-row table: (code, expires_at)
+        if let rows = try? JSONDecoder().decode([PairingCode].self, from: response.data), let first = rows.first {
+            return first
+        }
+        return try JSONDecoder().decode(PairingCode.self, from: response.data)
+    }
+
+    /// Your still-valid code, if any, so a relaunch doesn't silently replace the QR someone is scanning.
+    func activePairingCode(userId: UUID) async throws -> PairingCode? {
+        let response = try await client
+            .from("pairing_codes")
+            .select("code,expires_at")
+            .eq("user_id", value: userId.uuidString)
+            .is("used_by", value: nil)
+            .gt("expires_at", value: ISO8601DateFormatter().string(from: Date()))
+            .order("created_at", ascending: false)
+            .limit(1)
+            .execute()
+        return try JSONDecoder().decode([PairingCode].self, from: response.data).first
+    }
+
+    /// Who redeemed one of your codes (nil while unused). Reads a row you own.
+    func pairingCodeRedeemer(code: String) async throws -> UUID? {
+        struct Row: Decodable { let used_by: UUID? }
+        let response = try await client
+            .from("pairing_codes")
+            .select("used_by")
+            .eq("code", value: code)
+            .limit(1)
+            .execute()
+        return try JSONDecoder().decode([Row].self, from: response.data).first?.used_by
+    }
+
+    /// Redeems someone else's code. Returns the other person's user id — also when you
+    /// were already paired (the code is burnt either way).
+    func redeemPairingCode(_ code: String) async throws -> UUID {
+        struct Params: Encodable { let p_code: String }
+        let response = try await client
+            .rpc("redeem_pairing_code", params: Params(p_code: code))
+            .execute()
+        return try JSONDecoder().decode(UUID.self, from: response.data)
+    }
+
+    /// "People you are paired with": real pairings only, newest first.
+    /// Deliberately not `get_connected_users`, which also includes favor counterparties.
+    func myCircle(userId: UUID) async throws -> [CircleMember] {
+        struct ConnectionRow: Decodable {
+            let user_a: UUID
+            let user_b: UUID
+            let created_at: String
+        }
+        let rowsResponse = try await client
+            .from("connections")
+            .select("id,user_a,user_b,created_at")
+            .order("created_at", ascending: false)
+            .execute()
+        let rows = try JSONDecoder().decode([ConnectionRow].self, from: rowsResponse.data)
+        guard !rows.isEmpty else { return [] }
+
+        let others = rows.map { (id: $0.user_a == userId ? $0.user_b : $0.user_a, pairedAt: $0.created_at) }
+        let profilesResponse = try await client
+            .from("profiles")
+            .select("id,display_name,created_at,avatar_url")
+            .in("id", values: others.map(\.id.uuidString))
+            .execute()
+        let profiles = try JSONDecoder().decode([UserProfile].self, from: profilesResponse.data)
+        let byId = Dictionary(profiles.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+
+        return others.map { other in
+            let profile = byId[other.id]
+            let name = profile?.display_name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return CircleMember(
+                id: other.id,
+                displayName: name.isEmpty ? "Someone" : name,
+                avatarURL: profile?.avatar_url,
+                pairedAt: other.pairedAt
+            )
+        }
+    }
+
     func getConnectedUsers(userId: UUID, limit: Int = 10) async throws -> [UserProfile] {
         struct RPCParams: Encodable {
             let p_user_id: String

@@ -89,6 +89,8 @@ struct ProfileTabView: View {
                             .padding(.bottom, 40)
                     }
                 }
+                // Content fades in over the fixed backdrop on the tab's first visit
+                .fadeInOnFirstAppear()
                 .refreshable { await stats.load(userId: appVM.userId) }
             }
             .navigationBarHidden(true)
@@ -260,10 +262,13 @@ struct ProfileTabView: View {
     private var settingsSection: some View {
         VStack(spacing: 1) {
             notificationsRow
-            settingsRow(icon: "lock", label: "Privacy")
-            settingsRow(icon: "questionmark.circle", label: "Help & Feedback")
-            settingsRow(icon: "info.circle", label: "About Favorium")
+            settingsRow(icon: "questionmark.circle", label: "Help & Feedback", url: FavoriumWeb.help)
+            settingsRow(icon: "info.circle", label: "About Favorium", url: FavoriumWeb.about)
+            settingsRow(icon: "lock", label: "Privacy", url: FavoriumWeb.privacy)
+            settingsRow(icon: "doc.text", label: "Terms", url: FavoriumWeb.terms)
         }
+        // Web pages open in an in-app browser so people stay in Favorium
+        .environment(\.openURL, OpenURLAction { url in .systemAction(url, prefersInApp: true) })
         .background(FavoriumTheme.surface)
         .clipShape(RoundedRectangle(cornerRadius: FavoriumTheme.cardRadius))
         .overlay(
@@ -324,22 +329,26 @@ struct ProfileTabView: View {
         .accessibilityLabel("Notifications, \(notificationsEnabled ? "on" : "off")")
     }
 
-    private func settingsRow(icon: String, label: String) -> some View {
-        HStack(spacing: 14) {
-            Image(systemName: icon)
-                .font(.system(size: 16))
-                .foregroundColor(FavoriumTheme.accent)
-                .frame(width: 24)
-            Text(label)
-                .font(FavoriumTheme.bodyFont)
-                .foregroundColor(FavoriumTheme.ivory)
-            Spacer()
-            Image(systemName: "chevron.right")
-                .font(.system(size: 12))
-                .foregroundColor(FavoriumTheme.ivoryDim)
+    private func settingsRow(icon: String, label: String, url: URL) -> some View {
+        Link(destination: url) {
+            HStack(spacing: 14) {
+                Image(systemName: icon)
+                    .font(.system(size: 16))
+                    .foregroundColor(FavoriumTheme.accent)
+                    .frame(width: 24)
+                Text(label)
+                    .font(FavoriumTheme.bodyFont)
+                    .foregroundColor(FavoriumTheme.ivory)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12))
+                    .foregroundColor(FavoriumTheme.ivoryDim)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
+        .buttonStyle(.plain)
     }
 
     // MARK: - Sign Out
@@ -399,5 +408,21 @@ enum AvatarImage {
             }
         }
         return nil
+    }
+}
+
+// MARK: - Web pages
+
+/// favorium.app pages linked from the app.
+enum FavoriumWeb {
+    static let origin = "https://favorium.app"
+
+    static let about   = page("about")
+    static let help    = page("help")
+    static let privacy = page("privacy")
+    static let terms   = page("terms")
+
+    private static func page(_ path: String) -> URL {
+        URL(string: "\(origin)/\(path)")!
     }
 }

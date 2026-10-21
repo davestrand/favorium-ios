@@ -2,7 +2,7 @@
 //  OfferHelpView.swift
 //  favorium
 //
-//  "Offer help" sheet — step 1 of the favor flow. The signed-in user becomes
+//  "Offer a favor" sheet — step 1 of the favor flow. The signed-in user becomes
 //  the helper on a new favor (propose_favor). The other person then accepts,
 //  confirms it's done, and thanks the helper with a gem.
 //
@@ -159,7 +159,7 @@ struct OfferHelpView: View {
                             .clipShape(Circle())
                     }
                     Spacer()
-                    Text("Offer help")
+                    Text("Offer a favor")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(FavoriumTheme.ivory)
                     Spacer()
@@ -180,7 +180,7 @@ struct OfferHelpView: View {
                 } label: {
                     HStack {
                         Image(systemName: "hand.raised.fill")
-                        Text("Offer help")
+                        Text("Offer a favor")
                             .fontWeight(.semibold)
                     }
                     .frame(maxWidth: .infinity)
@@ -288,7 +288,7 @@ struct OfferHelpView: View {
                             }
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Offer help to \(person.displayName)")
+                        .accessibilityLabel("Offer a favor to \(person.displayName)")
                     }
                 }
                 .padding(.vertical, 2)
@@ -429,6 +429,6 @@ struct OfferHelpView: View {
     }
 }
 
-#Preview("Offer help") {
+#Preview("Offer a favor") {
     OfferHelpView(userId: nil, onComplete: {})
 }

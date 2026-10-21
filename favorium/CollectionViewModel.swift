@@ -14,7 +14,7 @@ final class CollectionViewModel {
 
     // MARK: - State
 
-    enum LoadState { case idle, loading, loaded, failed(String) }
+    enum LoadState: Equatable { case idle, loading, loaded, failed(String) }
 
     var held: [SupabaseService.CoinSummary]    = []
     var originals: [SupabaseService.CoinSummary] = []
