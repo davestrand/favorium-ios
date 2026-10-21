@@ -207,7 +207,7 @@ final class SupabaseService {
 
     struct CoinHistoryItem: Decodable, Identifiable, Sendable {
         let id: Int64
-        let eventType: String       // "minted" | "transferred"
+        let eventType: String       // "minted" | "transferred" | "renamed"
         let description: String?
         let createdAt: String
         let fromName: String?
@@ -219,10 +219,19 @@ final class SupabaseService {
         let toId: UUID?
         let fromAvatar: String?
         let toAvatar: String?
+        // Only on "renamed" rows, where `from_*` is the person who renamed it and `to_*` is null
+        var oldName: String? = nil
+        var newName: String? = nil
+
+        /// True only for an actual hand-off. Renames are never custody events.
+        var isTransfer: Bool { eventType == "transferred" }
+        var isRename: Bool { eventType == "renamed" }
 
         enum CodingKeys: String, CodingKey {
             case id, description
             case eventType  = "event_type"
+            case oldName    = "old_name"
+            case newName    = "new_name"
             case createdAt  = "created_at"
             case fromName   = "from_name"
             case toName     = "to_name"

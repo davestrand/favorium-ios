@@ -349,7 +349,7 @@ struct GemDetailView: View {
     /// to them (the same story the Collection card shows); otherwise its latest favor.
     private func story(_ j: SupabaseService.CoinJourneyPayload) -> SupabaseService.CoinHistoryItem? {
         let transfers = j.history
-            .filter { $0.eventType == "transferred" }
+            .filter(\.isTransfer)
             .sorted { $0.createdAt > $1.createdAt }
         if j.isOwner == true {
             return transfers.first { $0.isToMe == true }
@@ -510,8 +510,10 @@ struct GemDetailView: View {
         HStack(alignment: .top, spacing: 12) {
             // Timeline spine
             VStack(spacing: 0) {
+                // Hand-offs get a solid dot; a rename is a hollow ring — part of the story, not a step
                 Circle()
-                    .fill(FavoriumTheme.accent)
+                    .fill(item.isRename ? Color.clear : FavoriumTheme.accent)
+                    .overlay(Circle().strokeBorder(FavoriumTheme.accent, lineWidth: item.isRename ? 1.5 : 0))
                     .frame(width: 10, height: 10)
                     .padding(.top, 4)
                 if !isLast {
@@ -540,7 +542,16 @@ struct GemDetailView: View {
                         .foregroundColor(FavoriumTheme.ivoryDim)
                         .fixedSize()
                 }
-                if let desc = item.description, !desc.isEmpty {
+                if item.isRename, let oldName = item.oldName, let newName = item.newName {
+                    // Old name fades and is struck through; the new one carries the gold
+                    let before = Text(oldName).strikethrough()
+                    let after = Text(newName).foregroundColor(FavoriumTheme.accent).fontWeight(.semibold)
+                    Text("\(before)  →  \(after)")
+                        .font(FavoriumTheme.captionFont)
+                        .foregroundColor(FavoriumTheme.ivoryDim)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityLabel("Renamed from \(oldName) to \(newName)")
+                } else if let desc = item.description, !desc.isEmpty {
                     Text(desc)
                         .font(FavoriumTheme.captionFont)
                         .foregroundColor(FavoriumTheme.ivoryDim)
@@ -552,9 +563,12 @@ struct GemDetailView: View {
     }
 
     /// The person to picture on a journey step: the other party on your own transfers,
-    /// otherwise the recipient (for "minted", that's the creator).
+    /// otherwise the recipient (for "minted", that's the creator). A rename shows who renamed it.
     private func timelinePerson(_ item: SupabaseService.CoinHistoryItem) -> (id: UUID?, name: String?, photo: String?) {
-        if item.isToMe == true, item.eventType == "transferred" {
+        if item.isRename {
+            return (item.fromId, item.fromName, item.fromAvatar)
+        }
+        if item.isToMe == true, item.isTransfer {
             return (item.fromId, item.fromName, item.fromAvatar)
         }
         return (item.toId, item.toName, item.toAvatar)
@@ -570,6 +584,8 @@ struct GemDetailView: View {
             if item.isFromMe == true { return "You → \(to)" }
             if item.isToMe   == true { return "\(from) → You" }
             return "\(from) → \(to)"
+        case "renamed":
+            return item.isFromMe == true ? "You renamed it" : "\(item.fromName ?? "Someone") renamed it"
         default:
             return item.eventType.capitalized
         }

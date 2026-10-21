@@ -190,6 +190,7 @@ struct FavorsView: View {
     /// Favor awaiting cancel confirmation
     @State private var cancelling: SupabaseService.Favor?
     @State private var showConnect = false
+    @State private var viewingFavor: SupabaseService.Favor?
 
     var body: some View {
         NavigationStack {
@@ -285,6 +286,9 @@ struct FavorsView: View {
             }
             // Live updates: reload whenever a favor changes elsewhere
             .onChange(of: notifications.changeToken) { _, _ in reload() }
+            .sheet(item: $viewingFavor) { favor in
+                FavorDetailView(favor: favor, userId: appVM.userId)
+            }
             .sheet(isPresented: $showConnect) {
                 ConnectView(userId: appVM.userId)
             }
@@ -480,7 +484,10 @@ struct FavorsView: View {
                 } else {
                     VStack(spacing: 8) {
                         ForEach(vm.historyItems) { favor in
-                            HistoryFavorRow(favor: favor, currentUserId: appVM.userId)
+                            Button { viewingFavor = favor } label: {
+                                HistoryFavorRow(favor: favor, currentUserId: appVM.userId)
+                            }
+                            .buttonStyle(.plain)
                                 .transition(.opacity)
                         }
                     }
@@ -729,11 +736,11 @@ private struct HistoryFavorRow: View {
     let favor: SupabaseService.Favor
     let currentUserId: UUID?
 
-    private var iAmHelper: Bool { favor.helper_id == currentUserId }
-    /// The other person in the favor
-    private var otherId: UUID { iAmHelper ? favor.helped_id : favor.helper_id }
-    private var otherName: String? { iAmHelper ? favor.helped_name : favor.helper_name }
-    private var otherPhoto: String? { iAmHelper ? favor.helped_avatar_url : favor.helper_avatar_url }
+    private var otherId: UUID { favor.other(currentUserId).id }
+    private var otherName: String? { favor.other(currentUserId).name }
+    private var otherPhoto: String? { favor.other(currentUserId).photo }
+    private var rowHeadline: String { favor.headline(for: currentUserId) }
+    private var statusLabel: (text: String, icon: String) { favor.statusLabel }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -775,26 +782,6 @@ private struct HistoryFavorRow: View {
             RoundedRectangle(cornerRadius: FavoriumTheme.rowRadius)
                 .stroke(FavoriumTheme.accentMuted.opacity(0.18), lineWidth: 1)
         )
-    }
-
-    /// Written from the signed-in user's side: "You helped Sam" / "Sam helped you"
-    private var rowHeadline: String {
-        let other = otherName ?? (iAmHelper ? "someone" : "Someone")
-        if favor.isCompleted || favor.isTransferred {
-            return iAmHelper ? "You helped \(other)" : "\(other) helped you"
-        }
-        if favor.isDeclined {
-            return iAmHelper ? "\(other) declined your offer" : "You declined \(other)\u{2019}s offer"
-        }
-        if favor.isCancelled { return iAmHelper ? "Favor with \(other) cancelled" : "\(other)\u{2019}s favor cancelled" }
-        return "Past favor"
-    }
-
-    private var statusLabel: (text: String, icon: String) {
-        if favor.isTransferred { return ("Gem given", "gift") }
-        if favor.isDeclined    { return ("Declined", "xmark.circle") }
-        if favor.isCancelled   { return ("Cancelled", "minus.circle") }
-        return ("Completed", "checkmark.circle")
     }
 
     private var rowDate: String {
