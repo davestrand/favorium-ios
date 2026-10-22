@@ -87,6 +87,9 @@ struct GemInteriorView: View {
     @State private var lifted = false     // the gem has risen to the centre
     @State private var entered = false    // you've passed through its face
     @State private var flash = 0.0
+    /// The diving gem as a flat picture: scaling a bitmap is cheap, whereas the live gem
+    /// would re-render its glow and shadow at 9× size right as the shader starts.
+    @State private var divingGem: Image?
     @State private var scene: InteriorScene?
     // Touch state
     @State private var twist: Double = 0            // radians, accumulated from drags
@@ -113,7 +116,13 @@ struct GemInteriorView: View {
                 let start = startFrame.isEmpty
                     ? CGRect(x: size.width / 2 - 110, y: size.height / 2 - 110, width: 220, height: 220)
                     : startFrame
-                FavorGemView(dna: gemDNA, transferCount: transferCount, size: 220)
+                Group {
+                    if let divingGem {
+                        divingGem.resizable()
+                    } else {
+                        FavorGemView(dna: gemDNA, transferCount: transferCount, size: 220)
+                    }
+                }
                     .frame(width: 220, height: 220)
                     .scaleEffect(entered ? 9 : (lifted ? 1.25 : start.width / 220))
                     .position(lifted ? CGPoint(x: size.width / 2, y: size.height / 2)
@@ -183,7 +192,9 @@ struct GemInteriorView: View {
                     .float2(focus),
                     .float(1)
                 ),
-                maxSampleOffset: size
+                maxSampleOffset: size,
+                // Never run the shader before the view has a real size
+                isEnabled: size.width > 1 && size.height > 1
             )
         }
     }
@@ -281,6 +292,9 @@ struct GemInteriorView: View {
 
     /// Lift → pass through (buzz + flash) → inside.
     private func diveIn() async {
+        let renderer = ImageRenderer(content: FavorGemView(dna: gemDNA, transferCount: transferCount, size: 220))
+        renderer.scale = 3
+        if let picture = renderer.uiImage { divingGem = Image(uiImage: picture) }
         guard !reduceMotion else {
             withAnimation(.easeInOut(duration: 0.3)) { lifted = true; entered = true }
             return

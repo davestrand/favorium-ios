@@ -21,6 +21,11 @@ using namespace metal;
                                        float2 size, float segments, float rotation,
                                        float zoom, float2 focus, float facetGlow)
 {
+    // Before layout the size can be zero; dividing by it would hand the GPU NaN
+    // coordinates, which can stall the whole render server. Pass the pixel through.
+    if (size.x < 2.0 || size.y < 2.0 || !isfinite(rotation) || !isfinite(zoom)) {
+        return layer.sample(position);
+    }
     float2 center = size * 0.5;
     float2 p = position - center;
     float r = length(p);
@@ -38,6 +43,7 @@ using namespace metal;
     float2 m = s - period * floor(s / period);
     s = select(m, period - m, m > size);
     s = clamp(s, float2(1.0), size - 1.0);
+    if (!all(isfinite(s))) { s = center; }
 
     half4 color = layer.sample(s);
 
