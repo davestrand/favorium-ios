@@ -15,6 +15,7 @@
 //
 
 import SwiftUI
+import UIKit
 import CoreMotion
 
 // MARK: - What a gem's interior is made of
@@ -130,6 +131,9 @@ struct GemInteriorView: View {
         .sensoryFeedback(.impact(weight: .light), trigger: bursts.count)
         // Runs for as long as you're inside; cancelled (and the sensors stopped) on leaving
         .task { await motion.run(animated: !reduceMotion) }
+        // Tilt steers the kaleidoscope, so the screen itself must not rotate
+        .onAppear { OrientationLock.set(.portrait) }
+        .onDisappear { OrientationLock.set(.all) }
         .task {
             if scene == nil { scene = InteriorScene(interior: interior) }
             withAnimation(reduceMotion ? .easeInOut(duration: 0.3) : .easeIn(duration: 0.9)) { entered = true }
@@ -268,6 +272,24 @@ struct GemInteriorView: View {
     }
 }
 
+// MARK: - Orientation lock
+
+enum OrientationLock {
+    @MainActor
+    static func set(_ mask: UIInterfaceOrientationMask) {
+        AppDelegate.orientationLock = mask
+        for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
+            // Tell every controller in the chain, including the full-screen cover itself
+            var controller = scene.keyWindow?.rootViewController
+            while let current = controller {
+                current.setNeedsUpdateOfSupportedInterfaceOrientations()
+                controller = current.presentedViewController
+            }
+            scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { _ in }
+        }
+    }
+}
+
 // MARK: - Tilt
 
 /// Integrates the interior's motion each frame. Without tilt the tube turns slowly
@@ -285,8 +307,8 @@ final class InteriorMotion {
     @ObservationIgnored private var pitch: Double = 0
 
     static let baseSpin = 0.05          // radians per second at rest
-    static let tiltSpin = 0.9           // extra radians per second per radian of roll
-    static let tiltFlow = 2.5           // extra scene speed per radian of pitch
+    static let tiltSpin = 2.6           // extra radians per second per radian of roll
+    static let tiltFlow = 6.0           // extra scene speed per radian of pitch
 
     func run(animated: Bool) async {
         // Reduce Motion: no automatic movement, tilt included
@@ -317,10 +339,10 @@ final class InteriorMotion {
         // A small dead zone keeps a steady hand from drifting; then ease toward the new tilt
         func shaped(_ v: Double) -> Double {
             let clamped = max(-0.8, min(0.8, v))
-            return abs(clamped) < 0.05 ? 0 : clamped
+            return abs(clamped) < 0.03 ? 0 : clamped
         }
-        roll += (shaped(attitude.roll) - roll) * 0.15
-        pitch += (shaped(attitude.pitch) - pitch) * 0.15
+        roll += (shaped(attitude.roll) - roll) * 0.35
+        pitch += (shaped(attitude.pitch) - pitch) * 0.35
     }
 }
 

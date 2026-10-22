@@ -167,6 +167,14 @@ extension PushManager: UNUserNotificationCenterDelegate {
 // MARK: - App delegate (device token callbacks)
 
 final class AppDelegate: NSObject, UIApplicationDelegate {
+    /// Screens that must not rotate (the inside of a gem, where tilt steers) narrow this while shown.
+    static var orientationLock: UIInterfaceOrientationMask = .all
+
+    func application(_ application: UIApplication,
+                     supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        Self.orientationLock
+    }
+
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
