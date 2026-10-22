@@ -360,6 +360,7 @@ struct FavorsView: View {
                             personId: favor.helper_id,
                             personName: favor.helper_name,
                             personPhoto: favor.helper_avatar_url,
+                            personLevel: favor.helper_level,
                             title: "\(favor.helper_name ?? "Someone") helped you",
                             description: favor.description,
                             badge: ("Give a gem", FavoriumTheme.gold),
@@ -378,6 +379,7 @@ struct FavorsView: View {
                             personId: favor.helper_id,
                             personName: favor.helper_name,
                             personPhoto: favor.helper_avatar_url,
+                            personLevel: favor.helper_level,
                             title: "\(favor.helper_name ?? "Someone") is helping you",
                             description: favor.description,
                             badge: ("In progress", FavoriumTheme.accent),
@@ -396,6 +398,7 @@ struct FavorsView: View {
                             personId: favor.helped_id,
                             personName: favor.helped_name,
                             personPhoto: favor.helped_avatar_url,
+                            personLevel: favor.helped_level,
                             title: "You're helping \(favor.helped_name ?? "someone")",
                             description: favor.description,
                             badge: helperWaitingBadge(favor),
@@ -572,7 +575,7 @@ private struct IncomingPendingCard: View {
             HStack(alignment: .top, spacing: 12) {
                 // Who offered
                 PersonAvatar(userId: favor.helper_id, name: favor.helper_name,
-                             photo: favor.helper_avatar_url, size: 52)
+                             photo: favor.helper_avatar_url, level: favor.helper_level, size: 52)
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .firstTextBaseline) {
@@ -647,6 +650,7 @@ private struct FavorStatusCard: View {
     let personId: UUID
     let personName: String?
     let personPhoto: String?
+    var personLevel: Int? = nil
     let title: String
     let description: String
     struct Cancel {
@@ -662,7 +666,7 @@ private struct FavorStatusCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 12) {
-                PersonAvatar(userId: personId, name: personName, photo: personPhoto, size: 52)
+                PersonAvatar(userId: personId, name: personName, photo: personPhoto, level: personLevel, size: 52)
                 VStack(alignment: .leading, spacing: 6) {
                     Text(title)
                         .font(.system(size: 16, weight: .bold))
@@ -739,12 +743,13 @@ private struct HistoryFavorRow: View {
     private var otherId: UUID { favor.other(currentUserId).id }
     private var otherName: String? { favor.other(currentUserId).name }
     private var otherPhoto: String? { favor.other(currentUserId).photo }
+    private var otherLevel: Int? { favor.other(currentUserId).level }
     private var rowHeadline: String { favor.headline(for: currentUserId) }
     private var statusLabel: (text: String, icon: String) { favor.statusLabel }
 
     var body: some View {
         HStack(spacing: 12) {
-            PersonAvatar(userId: otherId, name: otherName, photo: otherPhoto, size: 48)
+            PersonAvatar(userId: otherId, name: otherName, photo: otherPhoto, level: otherLevel, size: 48)
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline) {

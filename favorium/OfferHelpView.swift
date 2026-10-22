@@ -207,7 +207,8 @@ struct OfferHelpView: View {
 
             if let chosen = vm.recipient {
                 HStack {
-                    PersonAvatar(userId: chosen.id, name: chosen.displayName, photo: chosen.avatar_url, size: 28)
+                    PersonAvatar(userId: chosen.id, name: chosen.displayName, photo: chosen.avatar_url,
+                                 level: chosen.helper_level, size: 28)
                     Text(chosen.displayName)
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(FavoriumTheme.ivory)
@@ -279,7 +280,8 @@ struct OfferHelpView: View {
                     ForEach(recent) { person in
                         Button { choose(person) } label: {
                             VStack(spacing: 6) {
-                                PersonAvatar(userId: person.id, name: person.displayName, photo: person.avatar_url, size: 52)
+                                PersonAvatar(userId: person.id, name: person.displayName, photo: person.avatar_url,
+                                             level: person.helper_level, size: 52)
                                 Text(person.displayName)
                                     .font(.system(size: 12))
                                     .foregroundColor(FavoriumTheme.ivory)
@@ -310,7 +312,8 @@ struct OfferHelpView: View {
             ForEach(people) { user in
                 Button { choose(user) } label: {
                     HStack {
-                        PersonAvatar(userId: user.id, name: user.displayName, photo: user.avatar_url, size: 28)
+                        PersonAvatar(userId: user.id, name: user.displayName, photo: user.avatar_url,
+                                     level: user.helper_level, size: 28)
                         Text(user.displayName)
                             .font(.system(size: 15))
                             .foregroundColor(FavoriumTheme.ivory)

@@ -22,26 +22,35 @@ struct GiftableGem: Identifiable, Hashable {
     let dna: SupabaseService.GemDNA?
     /// Who created the gem — only they may rename it
     let creatorId: UUID?
+    /// End of the 24h transfer cooldown, if the gem is still resting
+    let restingUntil: Date?
+
+    /// Resting gems can't change hands yet (transfer_coin would refuse)
+    var isResting: Bool { restingUntil.map { $0 > .now } ?? false }
 
     static func == (lhs: GiftableGem, rhs: GiftableGem) -> Bool { lhs.id == rhs.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
 
-    init(id: UUID, name: String, transferCount: Int, dna: SupabaseService.GemDNA?, creatorId: UUID? = nil) {
+    init(id: UUID, name: String, transferCount: Int, dna: SupabaseService.GemDNA?,
+         creatorId: UUID? = nil, restingUntil: Date? = nil) {
         self.id = id
         self.name = name
         self.transferCount = transferCount
         self.dna = dna
         self.creatorId = creatorId
+        self.restingUntil = restingUntil
     }
 
     /// Same gem with a new name (after rename_coin)
     func renamed(_ newName: String) -> GiftableGem {
-        GiftableGem(id: id, name: newName, transferCount: transferCount, dna: dna, creatorId: creatorId)
+        GiftableGem(id: id, name: newName, transferCount: transferCount, dna: dna,
+                    creatorId: creatorId, restingUntil: restingUntil)
     }
 
     init(_ coin: SupabaseService.CoinSummary) {
         self.init(id: coin.id, name: coin.name ?? "Gem",
-                  transferCount: coin.transfer_count ?? 0, dna: coin.gemDNA, creatorId: coin.creator_id)
+                  transferCount: coin.transfer_count ?? 0, dna: coin.gemDNA,
+                  creatorId: coin.creator_id, restingUntil: coin.restingUntil)
     }
 }
 
@@ -62,7 +71,13 @@ final class SendGemViewModel {
 
     var step: Step = .choose
 
-    var canReview: Bool { gem != nil && favor != nil }
+    var canReview: Bool { (gem.map { !$0.isResting } ?? false) && favor != nil }
+
+    /// Every gem the user holds is in its cooldown, so there's nothing to give yet
+    var allGemsResting: Bool { !heldGems.isEmpty && heldGems.allSatisfy(\.isResting) }
+
+    /// The first moment one of the held gems can move again
+    var soonestAvailable: Date? { heldGems.compactMap(\.restingUntil).min() }
 
     /// Load whichever side the user still needs to pick.
     @MainActor
@@ -92,7 +107,16 @@ final class SendGemViewModel {
             try await SupabaseService.shared.transferCoin(favorId: favor.id, coinId: gem.id)
             step = .done
         } catch {
-            step = .failed(error.localizedDescription)
+            if let until = SupabaseService.restingUntil(from: error) {
+                // Our copy of the cooldown was stale; record it so the picker greys this gem out
+                let resting = GiftableGem(id: gem.id, name: gem.name, transferCount: gem.transferCount,
+                                          dna: gem.dna, creatorId: gem.creatorId, restingUntil: until)
+                self.gem = resting
+                heldGems = heldGems.map { $0.id == gem.id ? resting : $0 }
+                step = .failed("\(gem.name) is resting. A gem can only change hands once a day. It can move again \(until.formatted(.relative(presentation: .named))).")
+            } else {
+                step = .failed(error.localizedDescription)
+            }
         }
     }
 }
@@ -177,6 +201,9 @@ struct SendGemView: View {
                                 changeButton { vm.gem = nil }
                             }
                         }
+                    if let until = gem.restingUntil, gem.isResting {
+                        restingNotice(name: gem.name, until: until)
+                    }
                 } else {
                     gemPicker
                 }
@@ -293,6 +320,22 @@ struct SendGemView: View {
                     .font(FavoriumTheme.captionFont)
                     .foregroundColor(FavoriumTheme.ivoryDim)
             } else {
+                if vm.allGemsResting, let soonest = vm.soonestAvailable {
+                    // Not a dead end: the favor stays complete and can be thanked later
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("Every gem is resting", systemImage: "moon.zzz.fill")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(FavoriumTheme.ivory)
+                        Text("A gem can only change hands once a day. The first one is ready in \(Text(soonest, style: .relative)). This favor will wait for you.")
+                            .font(FavoriumTheme.captionFont)
+                            .foregroundColor(FavoriumTheme.ivoryDim)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(FavoriumTheme.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: FavoriumTheme.cardRadius))
+                }
                 ForEach(vm.heldGems) { gem in
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) { vm.gem = gem }
@@ -303,17 +346,29 @@ struct SendGemView: View {
                                 Text(gem.name)
                                     .font(.system(size: 15, weight: .semibold))
                                     .foregroundColor(FavoriumTheme.ivory)
-                                Text(Tier.from(transferCount: gem.transferCount).displayName)
-                                    .font(FavoriumTheme.captionFont)
-                                    .foregroundColor(FavoriumTheme.ivoryDim)
+                                if let until = gem.restingUntil, gem.isResting {
+                                    Text("Resting · ready in \(Text(until, style: .relative))")
+                                        .font(FavoriumTheme.captionFont)
+                                        .foregroundColor(FavoriumTheme.ivoryDim)
+                                } else {
+                                    Text(Tier.from(transferCount: gem.transferCount).displayName)
+                                        .font(FavoriumTheme.captionFont)
+                                        .foregroundColor(FavoriumTheme.ivoryDim)
+                                }
                             }
                             Spacer()
+                            if gem.isResting {
+                                Image(systemName: "moon.zzz.fill")
+                                    .foregroundColor(FavoriumTheme.ivoryDim)
+                            }
                         }
                         .padding(12)
                         .background(FavoriumTheme.surface)
                         .clipShape(RoundedRectangle(cornerRadius: FavoriumTheme.rowRadius))
+                        .opacity(gem.isResting ? 0.5 : 1)
                     }
                     .buttonStyle(.plain)
+                    .disabled(gem.isResting)
                 }
             }
         }
@@ -550,6 +605,22 @@ struct SendGemView: View {
         Text(text)
             .font(.system(size: 13, weight: .medium))
             .foregroundColor(FavoriumTheme.ivoryDim)
+    }
+
+    /// Shown when the chosen gem is still in its 24h cooldown
+    private func restingNotice(name: String, until: Date) -> some View {
+        Label {
+            Text("\(name) is resting. A gem can only change hands once a day. It can move again in \(Text(until, style: .relative)).")
+                .fixedSize(horizontal: false, vertical: true)
+        } icon: {
+            Image(systemName: "moon.zzz.fill")
+        }
+        .font(FavoriumTheme.captionFont)
+        .foregroundColor(FavoriumTheme.ivoryDim)
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(FavoriumTheme.surface)
+        .clipShape(RoundedRectangle(cornerRadius: FavoriumTheme.rowRadius))
     }
 
     private func changeButton(_ action: @escaping () -> Void) -> some View {

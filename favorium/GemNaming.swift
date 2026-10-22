@@ -14,7 +14,8 @@ enum GemNaming {
 
     /// Starter names come from mint_coin as "<Family> <Noun>". Keep these lists
     /// in sync with the `v_label` cases and `v_nouns` array in mint_coin().
-    private static let starterFamilies: Set<String> = ["Lightning", "Celestial", "Victorian", "Gothic"]
+    /// "Gothic" is kept so gems minted before the Darkheart rename still count as starters.
+    private static let starterFamilies: Set<String> = ["Lightning", "Celestial", "Victorian", "Darkheart", "Gothic"]
     private static let starterNouns: Set<String> = [
         "Hearth", "Lantern", "Bloom", "Harbor", "Thread", "Echo",
         "Kindle", "Haven", "Promise", "Ripple", "Compass", "Garden"

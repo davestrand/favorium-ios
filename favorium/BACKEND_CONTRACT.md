@@ -40,7 +40,7 @@ All of these have been corrected in the iOS codebase as of this update.
 
 ### `GemFamily` asset mapping — RESOLVED
 Superseded by `BACKEND_CONTRACT 2.md` (verified against live data). `identity.base_form`
-values are exactly `lightning | celestial | victorian | gothic` — the iOS asset family
+values are exactly `lightning | celestial | victorian | darkheart` — the iOS asset family
 names. `GemDNA.resolvedFamily` reads Layer 1 `gemFamily`, then `base_form`, then
 `"lightning"`, skipping any layer that isn't a known family.
 

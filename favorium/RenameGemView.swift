@@ -149,5 +149,5 @@ struct RenameGemView: View {
 }
 
 #Preview("Rename gem") {
-    RenameGemView(coinId: UUID(), currentName: "Gothic Ripple", dna: nil, transferCount: 0) { _ in }
+    RenameGemView(coinId: UUID(), currentName: "Darkheart Ripple", dna: nil, transferCount: 0) { _ in }
 }

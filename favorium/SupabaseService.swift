@@ -86,6 +86,13 @@ final class SupabaseService {
         let owner_id: UUID?
         let created_at: String?
         let dna: JSONObject?
+        /// When this gem's 24h transfer cooldown ends; nil = it can move now (IOS_CONTRACT §15)
+        var available_at: String? = nil
+
+        /// The cooldown end, only while it's still in the future
+        var restingUntil: Date? {
+            SupabaseService.restingUntil(available_at)
+        }
 
         // Hashable conformance — dna (JSONObject) doesn't auto-conform, so exclude it.
         static func == (lhs: CoinSummary, rhs: CoinSummary) -> Bool { lhs.id == rhs.id }
@@ -100,10 +107,28 @@ final class SupabaseService {
             return try? JSONDecoder().decode(GemDNA.self, from: encoded)
         }
     }
+    /// A gem may change hands once per rolling 24h; `transfer_coin` raises this
+    /// message prefix (followed by a UTC timestamp) while it's resting.
+    static let restingErrorPrefix = "Gem is resting"
+
+    /// The cooldown end parsed from `available_at`, or nil once it has passed.
+    static func restingUntil(_ availableAt: String?) -> Date? {
+        guard let availableAt, let date = PairingCode.parseTimestamp(availableAt), date > .now else { return nil }
+        return date
+    }
+
+    /// The end time inside a "Gem is resting — it can move again at <ISO>" error, if that's what this is.
+    static func restingUntil(from error: Error) -> Date? {
+        let message = (error as? PostgrestError)?.message ?? error.localizedDescription
+        guard message.hasPrefix(restingErrorPrefix),
+              let raw = message.components(separatedBy: " at ").last else { return nil }
+        return PairingCode.parseTimestamp(raw.trimmingCharacters(in: .whitespaces))
+    }
+
     func myFavors(userId: UUID) async throws -> [CoinSummary] {
         let response = try await client
             .from("coins")
-            .select("id,serial,name,transfer_count,creator_id,owner_id,created_at,dna")
+            .select("id,serial,name,transfer_count,creator_id,owner_id,created_at,dna,available_at")
             .eq("owner_id", value: userId.uuidString)
             .order("created_at", ascending: false)
             .execute()
@@ -114,7 +139,7 @@ final class SupabaseService {
     func myOriginals(userId: UUID) async throws -> [CoinSummary] {
         let response = try await client
             .from("coins")
-            .select("id,serial,name,transfer_count,creator_id,owner_id,created_at,dna")
+            .select("id,serial,name,transfer_count,creator_id,owner_id,created_at,dna,available_at")
             .eq("creator_id", value: userId.uuidString)
             .order("created_at", ascending: false)
             .execute()
@@ -127,7 +152,7 @@ final class SupabaseService {
     /// Flat Layer-1 DNA keys written by mint_coin (dna_version 2).
     /// Also used as the canonical gem identity on both platforms.
     struct GemDNA: Decodable, Sendable {
-        let gemFamily: String       // "lightning" | "celestial" | "victorian" | "gothic"
+        let gemFamily: String       // "lightning" | "celestial" | "victorian" | "darkheart"
         let primaryHue: Double      // 0–360
         let saturation: Double      // 0–1
         let trait: String?          // nil until first Bloom transfer
@@ -207,7 +232,7 @@ final class SupabaseService {
 
     struct CoinHistoryItem: Decodable, Identifiable, Sendable {
         let id: Int64
-        let eventType: String       // "minted" | "transferred" | "renamed"
+        let eventType: String       // "minted" | "transferred" | "renamed" | "gifted"
         let description: String?
         let createdAt: String
         let fromName: String?
@@ -219,6 +244,8 @@ final class SupabaseService {
         let toId: UUID?
         let fromAvatar: String?
         let toAvatar: String?
+        var fromLevel: Int? = nil   // helper title levels; on a transfer, `to` is the helper
+        var toLevel: Int? = nil
         // Only on "renamed" rows, where `from_*` is the person who renamed it and `to_*` is null
         var oldName: String? = nil
         var newName: String? = nil
@@ -226,6 +253,8 @@ final class SupabaseService {
         /// True only for an actual hand-off. Renames are never custody events.
         var isTransfer: Bool { eventType == "transferred" }
         var isRename: Bool { eventType == "renamed" }
+        /// A gem the zero-balance safety valve gave to someone with an empty shelf
+        var isGift: Bool { eventType == "gifted" }
 
         enum CodingKeys: String, CodingKey {
             case id, description
@@ -241,6 +270,8 @@ final class SupabaseService {
             case toId       = "to_id"
             case fromAvatar = "from_avatar"
             case toAvatar   = "to_avatar"
+            case fromLevel  = "from_level"
+            case toLevel    = "to_level"
         }
     }
 
@@ -260,9 +291,19 @@ final class SupabaseService {
         let ownerId: UUID?
         let creatorAvatar: String?
         let ownerAvatar: String?
+        var creatorLevel: Int? = nil
+        var ownerLevel: Int? = nil
         let isOwner: Bool?          // null when called without user JWT
         let isCreator: Bool?        // null when called without user JWT
+        /// 24h transfer cooldown (IOS_CONTRACT §15); nil = can move now
+        var availableAt: String? = nil
+        var isResting: Bool? = nil
         let history: [CoinHistoryItem]
+
+        /// The cooldown end while it's still in the future
+        var restingUntil: Date? {
+            isResting == false ? nil : SupabaseService.restingUntil(availableAt)
+        }
 
         enum CodingKeys: String, CodingKey {
             case id, serial, name, dna, seed, history
@@ -275,8 +316,12 @@ final class SupabaseService {
             case ownerId      = "owner_id"
             case creatorAvatar = "creator_avatar"
             case ownerAvatar  = "owner_avatar"
+            case creatorLevel = "creator_level"
+            case ownerLevel   = "owner_level"
             case isOwner      = "is_owner"
             case isCreator    = "is_creator"
+            case availableAt  = "available_at"
+            case isResting    = "is_resting"
         }
     }
 
@@ -307,6 +352,9 @@ final class SupabaseService {
         /// Profile photo URLs (null until the person adds one)
         var helper_avatar_url: String? = nil
         var helped_avatar_url: String? = nil
+        /// Helper title levels, 0–5 (IOS_CONTRACT: helper titles)
+        var helper_level: Int? = nil
+        var helped_level: Int? = nil
         
         var isProposed: Bool { status == "proposed" }
         var isAccepted: Bool { status == "accepted" }
@@ -320,7 +368,7 @@ final class SupabaseService {
     func myIncomingFavors(userId: UUID) async throws -> [Favor] {
         let response = try await client
             .from("favors")
-            .select("id,helper_id,helped_id,description,status,created_at,accepted_at,completed_at,transferred_at,coin_id,helper:profiles!favors_helper_id_fkey(display_name,avatar_url),helped:profiles!favors_helped_id_fkey(display_name,avatar_url)")
+            .select("id,helper_id,helped_id,description,status,created_at,accepted_at,completed_at,transferred_at,coin_id,helper:profiles!favors_helper_id_fkey(display_name,avatar_url,helper_level),helped:profiles!favors_helped_id_fkey(display_name,avatar_url,helper_level)")
             .eq("helped_id", value: userId.uuidString)
             .order("created_at", ascending: false)
             .execute()
@@ -334,7 +382,7 @@ final class SupabaseService {
     func myOutgoingFavors(userId: UUID) async throws -> [Favor] {
         let response = try await client
             .from("favors")
-            .select("id,helper_id,helped_id,description,status,created_at,accepted_at,completed_at,transferred_at,coin_id,helper:profiles!favors_helper_id_fkey(display_name,avatar_url),helped:profiles!favors_helped_id_fkey(display_name,avatar_url)")
+            .select("id,helper_id,helped_id,description,status,created_at,accepted_at,completed_at,transferred_at,coin_id,helper:profiles!favors_helper_id_fkey(display_name,avatar_url,helper_level),helped:profiles!favors_helped_id_fkey(display_name,avatar_url,helper_level)")
             .eq("helper_id", value: userId.uuidString)
             .order("created_at", ascending: false)
             .execute()
@@ -468,6 +516,12 @@ final class SupabaseService {
         let display_name: String?
         let created_at: String?
         var avatar_url: String? = nil
+        /// Helper title level 0–5; never goes down
+        var helper_level: Int? = nil
+        /// Distinct people who confirmed a favor this user did (completed or paid)
+        var people_helped: Int? = nil
+        /// When the current level was reached (null at level 0)
+        var helper_level_at: String? = nil
         
         var displayName: String {
             display_name ?? "Unknown User"
@@ -478,7 +532,7 @@ final class SupabaseService {
     func searchUsers(query: String) async throws -> [UserProfile] {
         let response = try await client
             .from("profiles")
-            .select("id,display_name,created_at,avatar_url")
+            .select("id,display_name,created_at,avatar_url,helper_level")
             .ilike("display_name", pattern: "%\(query)%")
             .limit(20)
             .execute()
@@ -585,7 +639,7 @@ final class SupabaseService {
 
         let profilesResponse = try await client
             .from("profiles")
-            .select("id,display_name,created_at,avatar_url")
+            .select("id,display_name,created_at,avatar_url,helper_level")
             .in("id", values: otherIds.map(\.uuidString))
             .execute()
         return try JSONDecoder().decode([UserProfile].self, from: profilesResponse.data)
@@ -615,6 +669,7 @@ final class SupabaseService {
         let id: UUID            // the other person's user id
         let displayName: String
         let avatarURL: String?
+        var helperLevel: Int? = nil
         let pairedAt: String    // connections.created_at — the pairing date
     }
 
@@ -683,7 +738,7 @@ final class SupabaseService {
         let others = rows.map { (id: $0.user_a == userId ? $0.user_b : $0.user_a, pairedAt: $0.created_at) }
         let profilesResponse = try await client
             .from("profiles")
-            .select("id,display_name,created_at,avatar_url")
+            .select("id,display_name,created_at,avatar_url,helper_level")
             .in("id", values: others.map(\.id.uuidString))
             .execute()
         let profiles = try JSONDecoder().decode([UserProfile].self, from: profilesResponse.data)
@@ -696,6 +751,7 @@ final class SupabaseService {
                 id: other.id,
                 displayName: name.isEmpty ? "Someone" : name,
                 avatarURL: profile?.avatar_url,
+                helperLevel: profile?.helper_level,
                 pairedAt: other.pairedAt
             )
         }
@@ -722,7 +778,7 @@ final class SupabaseService {
     func getUserProfile(userId: UUID) async throws -> UserProfile {
         let response = try await client
             .from("profiles")
-            .select("id,display_name,created_at,avatar_url")
+            .select("id,display_name,created_at,avatar_url,helper_level,people_helped,helper_level_at")
             .eq("id", value: userId.uuidString)
             .single()
             .execute()
@@ -748,6 +804,7 @@ final class SupabaseService {
         struct ProfileName: Decodable {
             let display_name: String?
             let avatar_url: String?
+            var helper_level: Int? = nil
         }
         
         func toFavor() -> Favor {
@@ -765,7 +822,9 @@ final class SupabaseService {
                 helper_name: helper?.display_name,
                 helped_name: helped?.display_name,
                 helper_avatar_url: helper?.avatar_url,
-                helped_avatar_url: helped?.avatar_url
+                helped_avatar_url: helped?.avatar_url,
+                helper_level: helper?.helper_level,
+                helped_level: helped?.helper_level
             )
         }
     }

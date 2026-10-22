@@ -37,6 +37,33 @@ enum Tier: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Transfers needed to reach this tier — keep in sync with `from(transferCount:)`.
+    var minTransfers: Int {
+        switch self {
+        case .seed:     return 0
+        case .bloom:    return 5
+        case .legacy:   return 15
+        case .radiance: return 30
+        }
+    }
+
+    /// The tier after this one, or nil at Radiance.
+    var next: Tier? {
+        let all = Tier.allCases
+        guard let index = all.firstIndex(of: self), index + 1 < all.count else { return nil }
+        return all[index + 1]
+    }
+
+    /// Short user-facing explanation shown in the gem guide.
+    var description: String {
+        switch self {
+        case .seed:     return "Every gem begins here, freshly minted and full of promise."
+        case .bloom:    return "Passed along enough times to open up and reveal its hidden trait."
+        case .legacy:   return "A well-travelled gem carrying the story of many favors."
+        case .radiance: return "The rarest gems, shining with a long history of kindness."
+        }
+    }
+
     /// Suggested tint color that reflects each tier's visual theme.
     var defaultColor: Color {
         switch self {
@@ -66,7 +93,20 @@ enum GemFamily: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var displayName: String { rawValue.capitalized }
+    /// User-facing name. Asset names keep the raw value (e.g. `gothic`).
+    var displayName: String {
+        self == .gothic ? "Darkheart" : rawValue.capitalized
+    }
+
+    /// Short user-facing description shown in the gem guide.
+    var description: String {
+        switch self {
+        case .lightning: return "Bold and electric, cut with sharp facets that catch every spark."
+        case .celestial: return "Drawn from the night sky, with the calm glow of distant stars."
+        case .victorian: return "Ornate and elegant, set in the fine filigree of a treasured heirloom."
+        case .gothic:    return "Dark and dramatic, with a deep heart that glows from within."
+        }
+    }
 
     /// The asset name for this family at a given tier.
     func assetName(tier: Tier) -> String {
@@ -101,7 +141,10 @@ enum FrameFamily: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var displayName: String { rawValue.capitalized }
+    /// User-facing name. Asset names keep the raw value (e.g. `gothic`).
+    var displayName: String {
+        self == .gothic ? "Darkheart" : rawValue.capitalized
+    }
 
     /// The asset name for this family at a given tier.
     func assetName(tier: Tier) -> String {

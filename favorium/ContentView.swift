@@ -53,8 +53,20 @@ struct ContentView: View {
         // A tapped push opens the matching tab
         .onChange(of: push.pendingRoute) { _, route in
             guard let route else { return }
-            selectedTab = route == .collection ? .collection : .favors
+            switch route {
+            case .collection: selectedTab = .collection
+            case .favors:     selectedTab = .favors
+            case .profile:    selectedTab = .profile
+            }
             push.pendingRoute = nil
+        }
+        // A gem received can raise the helper title; re-read it whenever favors change
+        .onChange(of: notifications.changeToken) { _, _ in
+            Task { await appVM.refreshTitle() }
+        }
+        .sheet(item: $appVM.titleToCelebrate, onDismiss: { appVM.markTitleCelebrated() }) { title in
+            TitleEarnedView(title: title, userId: appVM.userId, name: appVM.displayName,
+                            photo: appVM.avatarURL, peopleHelped: appVM.peopleHelped)
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {

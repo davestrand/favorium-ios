@@ -436,7 +436,8 @@ struct ConnectView: View {
                 VStack(spacing: 0) {
                     ForEach(vm.circle) { member in
                         HStack(spacing: 12) {
-                            PersonAvatar(userId: member.id, name: member.displayName, photo: member.avatarURL, size: 44)
+                            PersonAvatar(userId: member.id, name: member.displayName, photo: member.avatarURL,
+                                         level: member.helperLevel, size: 44)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(member.displayName)
                                     .font(.system(size: 16, weight: .semibold))

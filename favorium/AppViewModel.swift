@@ -20,6 +20,15 @@ final class AppViewModel {
     var avatarURL: String?
     var isAuthenticated: Bool = false
 
+    // MARK: - Helper title (server-computed, never goes down)
+    var helperLevel: Int = 0
+    /// Distinct people who confirmed a favor this user did for them
+    var peopleHelped: Int = 0
+    /// Set when the level is newer than this device last celebrated; ContentView presents it
+    var titleToCelebrate: HelperTitle?
+
+    var helperTitle: HelperTitle? { HelperTitle(rawValue: helperLevel) }
+
     // MARK: - Shared loading flag (used by tabs during first load)
     var isBootstrapping: Bool = true
 
@@ -51,6 +60,35 @@ final class AppViewModel {
         displayName = [profileName, session.signUpDisplayName]
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .first { !$0.isEmpty } ?? ""
+        if let profile { applyTitle(from: profile) }
+    }
+
+    /// Re-reads the title after favors change (a gem received can raise it).
+    @MainActor
+    func refreshTitle() async {
+        guard let userId,
+              let profile = try? await SupabaseService.shared.getUserProfile(userId: userId) else { return }
+        applyTitle(from: profile)
+    }
+
+    /// The celebration has been shown; don't show this level again on this device.
+    func markTitleCelebrated() {
+        guard let userId, let title = titleToCelebrate else { return }
+        UserDefaults.standard.set(title.rawValue, forKey: Self.celebratedKey(userId))
+        titleToCelebrate = nil
+    }
+
+    @MainActor
+    private func applyTitle(from profile: SupabaseService.UserProfile) {
+        helperLevel = profile.helper_level ?? 0
+        peopleHelped = profile.people_helped ?? 0
+        guard let userId, let title = helperTitle else { return }
+        let celebrated = UserDefaults.standard.integer(forKey: Self.celebratedKey(userId))
+        if title.rawValue > celebrated { titleToCelebrate = title }
+    }
+
+    private static func celebratedKey(_ userId: UUID) -> String {
+        "celebratedHelperLevel.\(userId.uuidString.lowercased())"
     }
 
     @MainActor
@@ -62,6 +100,9 @@ final class AppViewModel {
         displayName = ""
         avatarURL = nil
         email = ""
+        helperLevel = 0
+        peopleHelped = 0
+        titleToCelebrate = nil
         isAuthenticated = false
     }
 }

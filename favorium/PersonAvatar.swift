@@ -5,6 +5,7 @@
 //  A person's thumbnail: their profile photo when they have one, otherwise
 //  their initial on a jewel-toned circle. The color is derived from the user's
 //  id, so the same person always looks the same on every screen and launch.
+//  People with a helper title wear its frame (HelperTitles.swift).
 //
 
 import SwiftUI
@@ -14,22 +15,33 @@ struct PersonAvatar: View {
     let name: String?
     /// Profile photo, once profiles carry one. Falls back to initials while loading or on failure.
     var photoURL: URL? = nil
+    /// Server `helper_level` (0–5); levels 1+ draw the title's frame around the avatar
+    var level: Int? = nil
     var size: CGFloat = 44
 
     /// Convenience for the `avatar_url` strings the backend returns.
-    init(userId: UUID?, name: String?, photo: String?, size: CGFloat = 44) {
+    init(userId: UUID?, name: String?, photo: String?, level: Int? = nil, size: CGFloat = 44) {
         self.init(userId: userId, name: name,
-                  photoURL: photo.flatMap { $0.isEmpty ? nil : URL(string: $0) }, size: size)
+                  photoURL: photo.flatMap { $0.isEmpty ? nil : URL(string: $0) }, level: level, size: size)
     }
 
-    init(userId: UUID?, name: String?, photoURL: URL? = nil, size: CGFloat = 44) {
+    init(userId: UUID?, name: String?, photoURL: URL? = nil, level: Int? = nil, size: CGFloat = 44) {
         self.userId = userId
         self.name = name
         self.photoURL = photoURL
+        self.level = level
         self.size = size
     }
 
+    private var title: HelperTitle? { level.flatMap(HelperTitle.init(rawValue:)) }
+
     var body: some View {
+        HelperTitleFrame(title: title, size: size) { portrait }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(title.map { "\(name ?? "Someone"), \($0.displayName)" } ?? (name ?? "Someone"))
+    }
+
+    private var portrait: some View {
         ZStack {
             initials
             if let photoURL {
@@ -43,7 +55,6 @@ struct PersonAvatar: View {
         .frame(width: size, height: size)
         .clipShape(Circle())
         .overlay(Circle().stroke(tint.opacity(0.55), lineWidth: max(1, size / 40)))
-        .accessibilityLabel(name ?? "Someone")
     }
 
     private var initials: some View {
@@ -90,6 +101,7 @@ struct PersonAvatar: View {
         PersonAvatar(userId: UUID(), name: "Sam", size: 56)
         PersonAvatar(userId: UUID(), name: "alex", size: 56)
         PersonAvatar(userId: nil, name: nil, size: 56)
+        PersonAvatar(userId: UUID(), name: "Robin", level: 2, size: 56)
     }
     .padding()
     .background(FavoriumTheme.background)

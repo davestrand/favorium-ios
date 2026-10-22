@@ -216,7 +216,13 @@ final class FavorNotificationCenter {
     func receivedForegroundPush(title: String, body: String?, favorId: String?, kind: String?) async {
         changeToken += 1
         await refreshActionCount()
-        let icon = kind == "transferred" ? "gift.fill" : "hand.raised.fill"
+        // "gift" is the zero-balance safety valve, "nudge" points back to helping (PUSH_CONTRACT §7.2),
+        // "title" announces a new helper title
+        let icon = switch kind {
+        case "transferred", "gift": "gift.fill"
+        case "title":               "sparkles"
+        default:                    "hand.raised.fill"
+        }
         let key = favorId.map { "\($0.lowercased())-\(kind ?? "")" }
         show(FavorBanner(title: title, detail: body, icon: icon), key: key)
     }

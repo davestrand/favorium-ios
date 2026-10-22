@@ -14,10 +14,10 @@ extension SupabaseService.Favor {
     func iAmHelper(_ userId: UUID?) -> Bool { helper_id == userId }
 
     /// The other person in the favor, from the signed-in user's side
-    func other(_ userId: UUID?) -> (id: UUID, name: String?, photo: String?) {
+    func other(_ userId: UUID?) -> (id: UUID, name: String?, photo: String?, level: Int?) {
         iAmHelper(userId)
-            ? (helped_id, helped_name, helped_avatar_url)
-            : (helper_id, helper_name, helper_avatar_url)
+            ? (helped_id, helped_name, helped_avatar_url, helped_level)
+            : (helper_id, helper_name, helper_avatar_url, helper_level)
     }
 
     /// "You helped Sam" / "Sam helped you"
@@ -112,7 +112,7 @@ struct FavorDetailView: View {
         let person = favor.other(userId)
         let status = favor.statusLabel
         return VStack(spacing: 10) {
-            PersonAvatar(userId: person.id, name: person.name, photo: person.photo, size: 72)
+            PersonAvatar(userId: person.id, name: person.name, photo: person.photo, level: person.level, size: 72)
             Text(favor.headline(for: userId))
                 .font(.system(size: 20, weight: .semibold))
                 .foregroundColor(FavoriumTheme.ivory)

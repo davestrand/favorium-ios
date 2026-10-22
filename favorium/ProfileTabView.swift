@@ -91,11 +91,17 @@ struct ProfileTabView: View {
                 }
                 // Content fades in over the fixed backdrop on the tab's first visit
                 .fadeInOnFirstAppear()
-                .refreshable { await stats.load(userId: appVM.userId) }
+                .refreshable {
+                    await stats.load(userId: appVM.userId)
+                    await appVM.refreshTitle()
+                }
             }
             .navigationBarHidden(true)
             // Re-runs whenever the tab appears, so counts reflect gems just given or received
-            .task { await stats.load(userId: appVM.userId) }
+            .task {
+                await stats.load(userId: appVM.userId)
+                await appVM.refreshTitle()
+            }
             .confirmationDialog(
                 "Sign out of Favorium?",
                 isPresented: $showSignOutConfirm,
@@ -115,7 +121,8 @@ struct ProfileTabView: View {
         VStack(spacing: 12) {
             // Same avatar others see for you — tap to add or change your photo
             Button { showPhotoPicker = true } label: {
-                PersonAvatar(userId: appVM.userId, name: appVM.displayName, photo: appVM.avatarURL, size: 88)
+                PersonAvatar(userId: appVM.userId, name: appVM.displayName, photo: appVM.avatarURL,
+                             level: appVM.helperLevel, size: 88)
                     .overlay {
                         if isSavingPhoto {
                             Circle().fill(.black.opacity(0.45))
@@ -135,6 +142,8 @@ struct ProfileTabView: View {
             }
             .buttonStyle(.plain)
             .disabled(isSavingPhoto)
+            // Room for the halo, which floats above the avatar
+            .padding(.top, appVM.helperTitle == nil ? 0 : 22)
             .accessibilityLabel(appVM.avatarURL == nil ? "Add profile photo" : "Change profile photo")
 
             HStack(spacing: 16) {
@@ -160,6 +169,22 @@ struct ProfileTabView: View {
                     .font(.system(size: 22, weight: .semibold, design: .serif))
                     .foregroundColor(FavoriumTheme.ivory)
                     .multilineTextAlignment(.center)
+
+                // No title until 3 different people have confirmed your help
+                if let title = appVM.helperTitle {
+                    VStack(spacing: 2) {
+                        Text(title.displayName)
+                            .font(.system(size: 15, weight: .semibold, design: .serif))
+                            .foregroundColor(FavoriumTheme.accent)
+                        Text(title.meaning)
+                            .font(FavoriumTheme.captionFont)
+                            .foregroundColor(FavoriumTheme.ivoryDim)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.bottom, 4)
+                    .accessibilityElement(children: .combine)
+                }
 
                 if !appVM.email.isEmpty {
                     Label(appVM.email, systemImage: "envelope")
@@ -218,15 +243,15 @@ struct ProfileTabView: View {
 
     private var statsRow: some View {
         HStack(spacing: 0) {
-            statCell(value: stats.gemsHeld, label: "Gems held", icon: "diamond")
+            statCell(value: stats.gemsHeld, label: "Gems held", icon: "tab_collection")
             Divider()
                 .background(FavoriumTheme.accentMuted.opacity(0.3))
                 .frame(height: 40)
-            statCell(value: stats.originals, label: "Originals", icon: "star")
+            statCell(value: stats.originals, label: "Originals", icon: "stat_originals")
             Divider()
                 .background(FavoriumTheme.accentMuted.opacity(0.3))
                 .frame(height: 40)
-            statCell(value: stats.favors, label: "Favors", icon: "heart")
+            statCell(value: stats.favors, label: "Favors", icon: "tab_favors")
         }
         .padding(.vertical, 16)
         .background(FavoriumTheme.surface)
@@ -237,10 +262,13 @@ struct ProfileTabView: View {
         )
     }
 
+    /// `icon` names a faceted template image in the asset catalog, matching the tab bar icons.
     private func statCell(value: Int?, label: String, icon: String) -> some View {
         VStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.system(size: 16, weight: .light))
+            Image(icon)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 20, height: 20)
                 .foregroundColor(FavoriumTheme.accent)
             // "–" until loaded (or if that count couldn't be fetched)
             Text(value.map(String.init) ?? "–")

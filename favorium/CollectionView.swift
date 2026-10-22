@@ -291,7 +291,6 @@ private struct GemGridCell: View {
     let onTap: () -> Void
 
     private var transferCount: Int { coin.transfer_count ?? 0 }
-    private var tier: Tier { Tier.from(transferCount: transferCount) }
     private var resolvedDNA: SupabaseService.GemDNA? { coin.gemDNA }
 
     var body: some View {
@@ -308,20 +307,6 @@ private struct GemGridCell: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
-
-                    // Trait badge — revealed from Bloom onward
-                    if tier != .seed, let trait = GemTrait.from(resolvedDNA?.trait) {
-                        Text(trait.displayName)
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(FavoriumTheme.accent)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 3)
-                            .background(FavoriumTheme.surface.opacity(0.9))
-                            .clipShape(Capsule())
-                            .overlay(Capsule().stroke(FavoriumTheme.accent.opacity(0.3), lineWidth: 1))
-                            .padding(8)
-                            .frame(maxWidth: .infinity, alignment: .topLeading)
-                    }
 
                     // Original indicator dot
                     if isOriginal {
@@ -432,7 +417,6 @@ private struct OriginalGemRow: View {
     let onTap: () -> Void
 
     private var transferCount: Int { coin.transfer_count ?? 0 }
-    private var tier: Tier { Tier.from(transferCount: transferCount) }
     private var resolvedDNA: SupabaseService.GemDNA? { coin.gemDNA }
 
     var body: some View {
@@ -454,20 +438,9 @@ private struct OriginalGemRow: View {
                             NameItTag()
                         }
                     }
-                    HStack(spacing: 6) {
-                        Text(holderSubtitle)
-                            .font(FavoriumTheme.captionFont)
-                            .foregroundColor(FavoriumTheme.ivoryDim)
-                        if tier != .seed, let trait = GemTrait.from(resolvedDNA?.trait) {
-                            Text(trait.displayName)
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundColor(FavoriumTheme.accent)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(FavoriumTheme.accent.opacity(0.12))
-                                .clipShape(Capsule())
-                        }
-                    }
+                    Text(holderSubtitle)
+                        .font(FavoriumTheme.captionFont)
+                        .foregroundColor(FavoriumTheme.ivoryDim)
                 }
 
                 Spacer()

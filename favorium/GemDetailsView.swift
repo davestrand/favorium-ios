@@ -58,6 +58,7 @@ struct GemDetailView: View {
     @State private var showSend = false
     @State private var showRename = false
     @State private var gemAppeared = false
+    @State private var guideTopic: GemGuideView.Topic?
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -91,12 +92,17 @@ struct GemDetailView: View {
                 }
             }
         }
+        .sheet(item: $guideTopic) { topic in
+            GemGuideView(initialTopic: topic, dna: vm.journey?.dna,
+                         transferCount: vm.journey?.transferCount ?? 0, userId: userId)
+        }
         .sheet(isPresented: $showSend) {
             if let j = vm.journey {
                 SendGemView(
                     initialGem: GiftableGem(id: coinId, name: j.name,
                                             transferCount: j.transferCount, dna: j.dna,
-                                            creatorId: j.isCreator == true ? userId : nil),
+                                            creatorId: j.isCreator == true ? userId : nil,
+                                            restingUntil: j.restingUntil),
                     userId: userId
                 ) {
                     Task { await vm.load(coinId: coinId, userId: userId) }
@@ -125,8 +131,14 @@ struct GemDetailView: View {
                     .padding(.horizontal, 24)
                     .padding(.bottom, 24)
 
+                // ── Resting (owner): the 24h cooldown since its last hand-off ─
+                if j.isOwner == true, let until = j.restingUntil {
+                    restingCard(until: until)
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 28)
+                }
                 // ── Send button (owner, with a completed favor awaiting a gem) ─
-                if j.isOwner == true && vm.hasFavorsAwaitingGem {
+                else if j.isOwner == true && vm.hasFavorsAwaitingGem {
                     sendButton
                         .padding(.horizontal, 24)
                         .padding(.bottom, 28)
@@ -296,11 +308,23 @@ struct GemDetailView: View {
                 .foregroundColor(FavoriumTheme.ivoryDim)
                 .multilineTextAlignment(.center)
 
+            // Tapping either half opens the gem guide at that topic
             HStack(spacing: 6) {
-                Text(family.displayName)
+                Button { guideTopic = .families } label: {
+                    Text(family.displayName)
+                }
+                .accessibilityHint("Learn about gem families")
                 Circle().frame(width: 3, height: 3)
-                Text(tier.displayName)
+                Button { guideTopic = .levels } label: {
+                    HStack(spacing: 4) {
+                        Text(tier.displayName)
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 11))
+                    }
+                }
+                .accessibilityHint("Learn about gem levels")
             }
+            .buttonStyle(.plain)
             .font(.system(size: 13))
             .foregroundColor(tier.defaultColor)
 
@@ -422,6 +446,30 @@ struct GemDetailView: View {
         }
     }
 
+    /// A gem can change hands once a day; this replaces the send button until then.
+    private func restingCard(until: Date) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "moon.zzz.fill")
+                .font(.system(size: 18))
+                .foregroundColor(FavoriumTheme.accent)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Resting")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(FavoriumTheme.ivory)
+                Text("It can move again in \(Text(until, style: .relative)).")
+                    .font(FavoriumTheme.captionFont)
+                    .foregroundColor(FavoriumTheme.ivoryDim)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(FavoriumTheme.surface)
+        .clipShape(RoundedRectangle(cornerRadius: FavoriumTheme.cardRadius))
+        .accessibilityElement(children: .combine)
+    }
+
     // MARK: - Journey timeline
 
     private func journeySection(_ j: SupabaseService.CoinJourneyPayload) -> some View {
@@ -503,12 +551,21 @@ struct GemDetailView: View {
         HStack(alignment: .top, spacing: 12) {
             // Timeline spine
             VStack(spacing: 0) {
-                // Hand-offs get a solid dot; a rename is a hollow ring — part of the story, not a step
-                Circle()
-                    .fill(item.isRename ? Color.clear : FavoriumTheme.accent)
-                    .overlay(Circle().strokeBorder(FavoriumTheme.accent, lineWidth: item.isRename ? 1.5 : 0))
-                    .frame(width: 10, height: 10)
-                    .padding(.top, 4)
+                if item.isGift {
+                    // A gift from Favorium is its own kind of step
+                    Image(systemName: "gift.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(FavoriumTheme.accent)
+                        .frame(width: 10, height: 12)
+                        .padding(.top, 3)
+                } else {
+                    // Hand-offs get a solid dot; a rename is a hollow ring — part of the story, not a step
+                    Circle()
+                        .fill(item.isRename ? Color.clear : FavoriumTheme.accent)
+                        .overlay(Circle().strokeBorder(FavoriumTheme.accent, lineWidth: item.isRename ? 1.5 : 0))
+                        .frame(width: 10, height: 10)
+                        .padding(.top, 4)
+                }
                 if !isLast {
                     Rectangle()
                         .fill(FavoriumTheme.accentMuted.opacity(0.35))
@@ -523,7 +580,7 @@ struct GemDetailView: View {
                 HStack(alignment: .center, spacing: 8) {
                     // Who this step was with (photo or initials)
                     let person = timelinePerson(item)
-                    PersonAvatar(userId: person.id, name: person.name, photo: person.photo, size: 24)
+                    PersonAvatar(userId: person.id, name: person.name, photo: person.photo, level: person.level, size: 24)
                     // Long names wrap rather than pushing the date off-screen
                     Text(transferLabel(item))
                         .font(.system(size: 15, weight: .semibold))
@@ -557,14 +614,14 @@ struct GemDetailView: View {
 
     /// The person to picture on a journey step: the other party on your own transfers,
     /// otherwise the recipient (for "minted", that's the creator). A rename shows who renamed it.
-    private func timelinePerson(_ item: SupabaseService.CoinHistoryItem) -> (id: UUID?, name: String?, photo: String?) {
+    private func timelinePerson(_ item: SupabaseService.CoinHistoryItem) -> (id: UUID?, name: String?, photo: String?, level: Int?) {
         if item.isRename {
-            return (item.fromId, item.fromName, item.fromAvatar)
+            return (item.fromId, item.fromName, item.fromAvatar, item.fromLevel)
         }
         if item.isToMe == true, item.isTransfer {
-            return (item.fromId, item.fromName, item.fromAvatar)
+            return (item.fromId, item.fromName, item.fromAvatar, item.fromLevel)
         }
-        return (item.toId, item.toName, item.toAvatar)
+        return (item.toId, item.toName, item.toAvatar, item.toLevel)
     }
 
     private func transferLabel(_ item: SupabaseService.CoinHistoryItem) -> String {
@@ -579,6 +636,8 @@ struct GemDetailView: View {
             return "\(from) → \(to)"
         case "renamed":
             return item.isFromMe == true ? "You renamed it" : "\(item.fromName ?? "Someone") renamed it"
+        case "gifted":
+            return item.isToMe == true ? "Found its way to you" : "Found its way to \(item.toName ?? "someone")"
         default:
             return item.eventType.capitalized
         }

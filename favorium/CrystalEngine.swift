@@ -283,7 +283,7 @@ struct CrystalModel {
 
     // Art families — nil means "use default fallback" in FavorGemView
     let gemFamily: String?        // e.g. "lightning"
-    let frameFamily: String?      // e.g. "gothic"
+    let frameFamily: String?      // e.g. "celestial"
     /// Hue (0–360) for the decorative frame, stored in dna.identity.frame_hue.
     /// Derived deterministically from seed when absent in older rows.
     let frameHue: Double          // 0-360
