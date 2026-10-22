@@ -9,10 +9,13 @@
 //  Every gem's interior is therefore unique and always the same for that gem.
 //
 //  Touch: drag to turn the kaleidoscope, pinch to look closer, tap to scatter
-//  light (mirrored into every wedge).
+//  light (mirrored into every wedge). Tilt: rolling the phone left or right
+//  sets the spin's speed and direction; tipping it toward or away from you
+//  speeds up or reverses the drift of the shapes inside.
 //
 
 import SwiftUI
+import CoreMotion
 
 // MARK: - What a gem's interior is made of
 
@@ -88,6 +91,7 @@ struct GemInteriorView: View {
     @State private var pinchStartZoom: Double?
     @State private var bursts: [LightBurst] = []
     @State private var showHint = true
+    @State private var motion = InteriorMotion()
 
     var body: some View {
         GeometryReader { geo in
@@ -124,6 +128,8 @@ struct GemInteriorView: View {
         .ignoresSafeArea()
         .statusBarHidden()
         .sensoryFeedback(.impact(weight: .light), trigger: bursts.count)
+        // Runs for as long as you're inside; cancelled (and the sensors stopped) on leaving
+        .task { await motion.run(animated: !reduceMotion) }
         .task {
             if scene == nil { scene = InteriorScene(interior: interior) }
             withAnimation(reduceMotion ? .easeInOut(duration: 0.3) : .easeIn(duration: 0.9)) { entered = true }
@@ -139,7 +145,8 @@ struct GemInteriorView: View {
 
     private func kaleidoscope(size: CGSize) -> some View {
         TimelineView(.animation(paused: reduceMotion)) { timeline in
-            let t = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate
+            // Scene time and spin are integrated by InteriorMotion, so tilt can speed them up or reverse them
+            let t = motion.sceneTime
             let center = CGPoint(x: size.width / 2, y: size.height / 2)
             let focus = CGPoint(x: center.x + focusOffset.width, y: center.y + focusOffset.height)
             Canvas { context, canvasSize in
@@ -149,7 +156,7 @@ struct GemInteriorView: View {
                 ShaderLibrary.gemKaleidoscope(
                     .float2(size),
                     .float(Float(interior.segments)),
-                    .float(Float(tubeAngle(time: t))),
+                    .float(Float(tubeAngle)),
                     .float(Float(zoom)),
                     .float2(focus),
                     .float(1)
@@ -236,19 +243,18 @@ struct GemInteriorView: View {
     /// A tap lights up the matching spot in the source, so it blooms in every wedge at once.
     private func scatterLight(at location: CGPoint, size: CGSize) {
         guard entered else { return }
-        let t = reduceMotion ? 0 : Date.now.timeIntervalSinceReferenceDate
         let source = KaleidoscopeMath.sourcePoint(
             for: location, size: size, segments: Double(interior.segments),
-            rotation: tubeAngle(time: t), zoom: zoom,
+            rotation: tubeAngle, zoom: zoom,
             focus: CGPoint(x: size.width / 2 + focusOffset.width, y: size.height / 2 + focusOffset.height))
         bursts.append(LightBurst(point: source, start: .now, hue: [interior.gemHue, interior.frameHue].randomElement() ?? 0))
         bursts.removeAll { Date.now.timeIntervalSince($0.start) > LightBurst.lifetime }
     }
 
-    /// Your twist plus a slow, constant turn of the tube, wrapped to one turn: the GPU
-    /// works in 32-bit floats, which can't fold angles of millions of radians.
-    private func tubeAngle(time t: Double) -> Double {
-        (twist + t * 0.05).truncatingRemainder(dividingBy: 2 * .pi)
+    /// Your twist plus the tilt-driven spin, wrapped to one turn: the GPU works in
+    /// 32-bit floats, which can't fold angles of millions of radians.
+    private var tubeAngle: Double {
+        (twist + motion.spinAngle).truncatingRemainder(dividingBy: 2 * .pi)
     }
 
     private func leave() {
@@ -259,6 +265,62 @@ struct GemInteriorView: View {
             transaction.disablesAnimations = true
             withTransaction(transaction) { dismiss() }
         }
+    }
+}
+
+// MARK: - Tilt
+
+/// Integrates the interior's motion each frame. Without tilt the tube turns slowly
+/// and the shapes drift forward; tilt changes both speeds, and can reverse them.
+/// The attitude when you entered counts as level, so it works lying down too.
+@MainActor
+@Observable
+final class InteriorMotion {
+    private(set) var spinAngle: Double = 0      // radians, wrapped
+    private(set) var sceneTime: Double = 0      // seconds of scene drift, may run backwards
+
+    @ObservationIgnored private let manager = CMMotionManager()
+    @ObservationIgnored private var reference: CMAttitude?
+    @ObservationIgnored private var roll: Double = 0     // smoothed, radians
+    @ObservationIgnored private var pitch: Double = 0
+
+    static let baseSpin = 0.05          // radians per second at rest
+    static let tiltSpin = 0.9           // extra radians per second per radian of roll
+    static let tiltFlow = 2.5           // extra scene speed per radian of pitch
+
+    func run(animated: Bool) async {
+        // Reduce Motion: no automatic movement, tilt included
+        guard animated else { return }
+        if manager.isDeviceMotionAvailable {
+            manager.deviceMotionUpdateInterval = 1.0 / 60
+            manager.startDeviceMotionUpdates()
+        }
+        defer { manager.stopDeviceMotionUpdates() }
+
+        var last = Date.now
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .milliseconds(16))
+            let now = Date.now
+            let dt = min(now.timeIntervalSince(last), 0.1)
+            last = now
+            readTilt()
+            spinAngle = (spinAngle + (Self.baseSpin + roll * Self.tiltSpin) * dt)
+                .truncatingRemainder(dividingBy: 2 * .pi)
+            sceneTime += (1 + pitch * Self.tiltFlow) * dt
+        }
+    }
+
+    private func readTilt() {
+        guard let attitude = manager.deviceMotion?.attitude.copy() as? CMAttitude else { return }
+        guard let reference else { self.reference = attitude; return }
+        attitude.multiply(byInverseOf: reference)
+        // A small dead zone keeps a steady hand from drifting; then ease toward the new tilt
+        func shaped(_ v: Double) -> Double {
+            let clamped = max(-0.8, min(0.8, v))
+            return abs(clamped) < 0.05 ? 0 : clamped
+        }
+        roll += (shaped(attitude.roll) - roll) * 0.15
+        pitch += (shaped(attitude.pitch) - pitch) * 0.15
     }
 }
 
