@@ -292,10 +292,11 @@ private struct GemGridCell: View {
 
     private var transferCount: Int { coin.transfer_count ?? 0 }
     private var resolvedDNA: SupabaseService.GemDNA? { coin.gemDNA }
+    @State private var showInterior = false
 
     var body: some View {
-        Button(action: onTap) {
-            VStack(spacing: 0) {
+        // Tap opens the gem's page; press and hold steps inside it
+        VStack(spacing: 0) {
                 ZStack(alignment: .topTrailing) {
                     // Gem — asset-based renderer
                     Group {
@@ -345,8 +346,14 @@ private struct GemGridCell: View {
                 RoundedRectangle(cornerRadius: FavoriumTheme.cardRadius)
                     .stroke(FavoriumTheme.accentMuted.opacity(0.25), lineWidth: 1)
             )
-        }
-        .buttonStyle(.plain)
+        .contentShape(RoundedRectangle(cornerRadius: FavoriumTheme.cardRadius))
+        .onTapGesture(perform: onTap)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .enterGemOnLongPress(
+            isPresented: $showInterior,
+            interior: { GemInterior(name: coin.name ?? "Gem", dna: resolvedDNA, transferCount: transferCount) },
+            dna: resolvedDNA, transferCount: transferCount)
     }
 
     // MARK: - Story

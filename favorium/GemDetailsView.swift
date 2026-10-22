@@ -59,6 +59,7 @@ struct GemDetailView: View {
     @State private var showRename = false
     @State private var gemAppeared = false
     @State private var guideTopic: GemGuideView.Topic?
+    @State private var showInterior = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -209,8 +210,20 @@ struct GemDetailView: View {
             .spring(response: 0.45, dampingFraction: 0.62),
             value: gemAppeared
         )
+        // Press and hold to step inside the gem
+        .enterGemOnLongPress(
+            isPresented: $showInterior,
+            interior: { GemInterior(name: j.name, dna: j.dna, transferCount: j.transferCount) },
+            dna: j.dna, transferCount: j.transferCount)
         .frame(maxWidth: .infinity)
         .frame(height: 360)
+        .overlay(alignment: .bottom) {
+            Label("Press and hold to step inside", systemImage: "hand.tap")
+                .font(FavoriumTheme.captionFont)
+                .foregroundStyle(.white.opacity(0.7))
+                .padding(.bottom, 12)
+                .allowsHitTesting(false)
+        }
         // Decorative gradients live in the background so their oversized
         // frames never widen the layout — on small phones the 448pt glow
         // used to push the whole scroll content (and the Journey) off-screen.
