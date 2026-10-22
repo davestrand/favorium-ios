@@ -42,8 +42,10 @@ using namespace metal;
     half4 color = layer.sample(s);
 
     // Light catching the cut: a thin bright line along each seam, fading out at the centre
+    // and again toward the edges so it reads as cut stone rather than a grid
     float seamDistance = folded * r;
-    float seam = (1.0 - smoothstep(0.0, 1.6, seamDistance)) * smoothstep(10.0, 60.0, r) * facetGlow;
+    float edgeFade = 1.0 - smoothstep(0.3, 0.85, r / length(center));
+    float seam = (1.0 - smoothstep(0.0, 1.6, seamDistance)) * smoothstep(10.0, 60.0, r) * edgeFade * facetGlow;
     color.rgb = mix(color.rgb, half3(1.0) * color.a, half(seam * 0.35));
     return color;
 }

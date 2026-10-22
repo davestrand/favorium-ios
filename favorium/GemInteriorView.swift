@@ -106,11 +106,11 @@ struct GemInteriorView: View {
                     .opacity(entered ? 0 : 1)
                     .allowsHitTesting(false)
 
-                // Soft vignette — the curved walls of the stone
-                RadialGradient(colors: [.clear, .black.opacity(0.55)],
+                // Vignette — the curved walls of the stone closing in at the edges
+                RadialGradient(colors: [.clear, .black.opacity(0.35), .black.opacity(0.8)],
                                center: .center,
-                               startRadius: min(size.width, size.height) * 0.35,
-                               endRadius: max(size.width, size.height) * 0.75)
+                               startRadius: min(size.width, size.height) * 0.28,
+                               endRadius: max(size.width, size.height) * 0.62)
                     .allowsHitTesting(false)
 
                 chrome
@@ -364,10 +364,12 @@ final class InteriorScene {
                 layer.addFilter(.colorMultiply(interior.frameColor))
                 layer.draw(frame, in: box)
             case .facet:
-                layer.opacity = 0.8
+                // Jewel tones only (the gem and its complement), translucent so the art shows through
+                layer.opacity = 0.5
                 layer.blendMode = .screen
+                let tone = shard.colorIndex.isMultiple(of: 2) ? interior.gemColor : interior.gemComplement
                 layer.fill(facetPath(in: box), with: .linearGradient(
-                    Gradient(colors: [palette[shard.colorIndex], palette[(shard.colorIndex + 1) % 4].opacity(0.2)]),
+                    Gradient(colors: [tone, tone.opacity(0.1)]),
                     startPoint: box.origin, endPoint: CGPoint(x: box.maxX, y: box.maxY)))
             }
         }
