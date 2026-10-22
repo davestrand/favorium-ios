@@ -78,11 +78,15 @@ struct GemInteriorView: View {
     /// The gem as shown on the screen you came from, so the dive starts from it
     let gemDNA: SupabaseService.GemDNA?
     let transferCount: Int
+    /// Where the gem sat on the screen you came from (global coordinates), so the dive starts from it
+    var startFrame: CGRect = .zero
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    @State private var entered = false
+    @State private var lifted = false     // the gem has risen to the centre
+    @State private var entered = false    // you've passed through its face
+    @State private var flash = 0.0
     @State private var scene: InteriorScene?
     // Touch state
     @State private var twist: Double = 0            // radians, accumulated from drags
@@ -99,16 +103,30 @@ struct GemInteriorView: View {
             let size = geo.size
             ZStack {
                 // Darkens over the screen you came from as you pass into the stone
-                Color.black.opacity(entered ? 1 : 0)
+                Color.black.opacity(entered ? 1 : (lifted ? 0.65 : 0))
 
                 kaleidoscope(size: size)
                     .scaleEffect(entered ? 1 : 0.2)
                     .opacity(entered ? 1 : 0)
 
-                // The gem swells past the screen as you pass through its face
+                // The same gem lifts from where it sat, then swells past the screen as you pass through it
+                let start = startFrame.isEmpty
+                    ? CGRect(x: size.width / 2 - 110, y: size.height / 2 - 110, width: 220, height: 220)
+                    : startFrame
                 FavorGemView(dna: gemDNA, transferCount: transferCount, size: 220)
-                    .scaleEffect(entered ? 9 : 1)
+                    .frame(width: 220, height: 220)
+                    .scaleEffect(entered ? 9 : (lifted ? 1.25 : start.width / 220))
+                    .position(lifted ? CGPoint(x: size.width / 2, y: size.height / 2)
+                                     : CGPoint(x: start.midX, y: start.midY))
                     .opacity(entered ? 0 : 1)
+                    .allowsHitTesting(false)
+
+                // A burst of the gem's own light at the moment you pass through
+                RadialGradient(colors: [.white, interior.gemColor.opacity(0.85), interior.gemColor.opacity(0)],
+                               center: .center, startRadius: 0,
+                               endRadius: max(size.width, size.height) * 0.7)
+                    .opacity(flash)
+                    .blendMode(.plusLighter)
                     .allowsHitTesting(false)
 
                 // Vignette — the curved walls of the stone closing in at the edges
@@ -136,7 +154,7 @@ struct GemInteriorView: View {
         .onDisappear { OrientationLock.set(.all) }
         .task {
             if scene == nil { scene = InteriorScene(interior: interior) }
-            withAnimation(reduceMotion ? .easeInOut(duration: 0.3) : .easeIn(duration: 0.9)) { entered = true }
+            await diveIn()
             try? await Task.sleep(for: .seconds(4))
             withAnimation(.easeOut(duration: 0.8)) { showHint = false }
         }
@@ -261,10 +279,26 @@ struct GemInteriorView: View {
         (twist + motion.spinAngle).truncatingRemainder(dividingBy: 2 * .pi)
     }
 
+    /// Lift → pass through (buzz + flash) → inside.
+    private func diveIn() async {
+        guard !reduceMotion else {
+            withAnimation(.easeInOut(duration: 0.3)) { lifted = true; entered = true }
+            return
+        }
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) { lifted = true }
+        try? await Task.sleep(for: .seconds(0.4))
+        UIImpactFeedbackGenerator(style: .rigid).impactOccurred(intensity: 1)
+        withAnimation(.easeIn(duration: 0.35)) { entered = true }
+        withAnimation(.easeIn(duration: 0.22)) { flash = 1 }
+        try? await Task.sleep(for: .seconds(0.28))
+        withAnimation(.easeOut(duration: 0.8)) { flash = 0 }
+    }
+
     private func leave() {
-        withAnimation(.easeOut(duration: 0.35)) { entered = false }
+        // The gem shrinks back to where it came from before the cover goes away
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) { entered = false; lifted = false }
         Task {
-            try? await Task.sleep(for: .seconds(0.35))
+            try? await Task.sleep(for: .seconds(0.45))
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) { dismiss() }
@@ -572,19 +606,25 @@ private struct EnterGemModifier: ViewModifier {
     let interior: () -> GemInterior
     let dna: SupabaseService.GemDNA?
     let transferCount: Int
+    @State private var sourceFrame: CGRect = .zero
 
     func body(content: Content) -> some View {
         content
+            // Hidden while you're inside, so only the diving copy is ever on screen
+            .opacity(isPresented ? 0 : 1)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { sourceFrame = $0 }
             .onLongPressGesture(minimumDuration: 0.45) { present() }
-            .sensoryFeedback(.impact(weight: .medium), trigger: isPresented) { _, new in new }
             .accessibilityAction(named: "Step inside the gem") { present() }
             .fullScreenCover(isPresented: $isPresented) {
-                GemInteriorView(interior: interior(), gemDNA: dna, transferCount: transferCount)
+                GemInteriorView(interior: interior(), gemDNA: dna, transferCount: transferCount,
+                                startFrame: sourceFrame)
                     .presentationBackground(.clear)
             }
     }
 
     private func present() {
+        // Felt the instant the press is recognised
+        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
         var transaction = Transaction()
         transaction.disablesAnimations = true
         withTransaction(transaction) { isPresented = true }

@@ -305,6 +305,11 @@ private struct GemGridCell: View {
                             transferCount: transferCount,
                             size: 110
                         )
+                        // Press and hold the gem to step inside it
+                        .enterGemOnLongPress(
+                            isPresented: $showInterior,
+                            interior: { GemInterior(name: coin.name ?? "Gem", dna: resolvedDNA, transferCount: transferCount) },
+                            dna: resolvedDNA, transferCount: transferCount)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
@@ -350,10 +355,6 @@ private struct GemGridCell: View {
         .onTapGesture(perform: onTap)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
-        .enterGemOnLongPress(
-            isPresented: $showInterior,
-            interior: { GemInterior(name: coin.name ?? "Gem", dna: resolvedDNA, transferCount: transferCount) },
-            dna: resolvedDNA, transferCount: transferCount)
     }
 
     // MARK: - Story
