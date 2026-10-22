@@ -64,7 +64,7 @@ struct ContentView: View {
         .onChange(of: notifications.changeToken) { _, _ in
             Task { await appVM.refreshTitle() }
         }
-        .sheet(item: $appVM.titleToCelebrate, onDismiss: { appVM.markTitleCelebrated() }) { title in
+        .sheet(item: $appVM.titleToCelebrate) { title in
             TitleEarnedView(title: title, userId: appVM.userId, name: appVM.displayName,
                             photo: appVM.avatarURL, peopleHelped: appVM.peopleHelped)
         }

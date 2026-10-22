@@ -71,12 +71,6 @@ final class AppViewModel {
         applyTitle(from: profile)
     }
 
-    /// The celebration has been shown; don't show this level again on this device.
-    func markTitleCelebrated() {
-        guard let userId, let title = titleToCelebrate else { return }
-        UserDefaults.standard.set(title.rawValue, forKey: Self.celebratedKey(userId))
-        titleToCelebrate = nil
-    }
 
     @MainActor
     private func applyTitle(from profile: SupabaseService.UserProfile) {
@@ -84,7 +78,11 @@ final class AppViewModel {
         peopleHelped = profile.people_helped ?? 0
         guard let userId, let title = helperTitle else { return }
         let celebrated = UserDefaults.standard.integer(forKey: Self.celebratedKey(userId))
-        if title.rawValue > celebrated { titleToCelebrate = title }
+        guard title.rawValue > celebrated else { return }
+        // Recorded the moment it's shown: the sheet clears `titleToCelebrate` before its
+        // onDismiss runs, so marking it there never saved and the alert kept returning
+        UserDefaults.standard.set(title.rawValue, forKey: Self.celebratedKey(userId))
+        titleToCelebrate = title
     }
 
     private static func celebratedKey(_ userId: UUID) -> String {
