@@ -30,9 +30,12 @@ struct GemInterior {
     let seed: String
     /// Only shown from Bloom onward, the same rule as the gem itself
     let trait: GemTrait?
+    /// Used to look for a secret engraving (only the holder gets one back)
+    let coinId: UUID?
 
-    init(name: String, dna: SupabaseService.GemDNA?, transferCount: Int) {
+    init(name: String, dna: SupabaseService.GemDNA?, transferCount: Int, coinId: UUID? = nil) {
         let tier = Tier.from(transferCount: transferCount)
+        self.coinId = coinId
         self.name = name
         self.family = GemFamily.from(dna?.resolvedFamily)
         self.tier = tier
@@ -100,6 +103,9 @@ struct GemInteriorView: View {
     @State private var bursts: [LightBurst] = []
     @State private var showHint = true
     @State private var motion = InteriorMotion()
+    /// The gem's one secret, if someone engraved it and you hold it
+    @State private var engraving: SupabaseService.Engraving?
+    @State private var confirmHide = false
 
     var body: some View {
         GeometryReader { geo in
@@ -145,11 +151,14 @@ struct GemInteriorView: View {
                                endRadius: max(size.width, size.height) * 0.62)
                     .allowsHitTesting(false)
 
+                if let engraving { secret(engraving, size: size) }
+
                 chrome
             }
             .contentShape(Rectangle())
             .gesture(twistGesture(size: size).simultaneously(with: pinchGesture))
             .onTapGesture(coordinateSpace: .local) { location in
+                motion.touched()
                 scatterLight(at: location, size: size)
             }
         }
@@ -158,6 +167,17 @@ struct GemInteriorView: View {
         .sensoryFeedback(.impact(weight: .light), trigger: bursts.count)
         // Runs for as long as you're inside; cancelled (and the sensors stopped) on leaving
         .task { await motion.run(animated: !reduceMotion) }
+        .task {
+            if let coinId = interior.coinId {
+                engraving = try? await SupabaseService.shared.coinEngravings(coinId: coinId).last
+            }
+        }
+        .sensoryFeedback(.impact(flexibility: .soft), trigger: motion.isRevealed) { _, new in new && engraving != nil }
+        .confirmationDialog("Hide this message?", isPresented: $confirmHide, titleVisibility: .visible) {
+            Button("Hide it for me", role: .destructive) { hideSecret() }
+        } message: {
+            Text("You won't see it again in this gem. It stays for whoever holds the gem next.")
+        }
         // Tilt steers the kaleidoscope, so the screen itself must not rotate
         .onAppear { OrientationLock.set(.portrait) }
         .onDisappear { OrientationLock.set(.all) }
@@ -223,6 +243,14 @@ struct GemInteriorView: View {
                 Text(interior.name)
                     .font(.system(size: 20, weight: .semibold, design: .serif))
                     .foregroundStyle(.white)
+                if engraving != nil, !motion.isRevealed, !motion.hasRevealed {
+                    // Only gems that truly hold words ever say so
+                    Text("Something is written inside. Be still…")
+                        .font(.system(size: 13, weight: .medium, design: .serif))
+                        .italic()
+                        .foregroundStyle(.white.opacity(0.85))
+                        .transition(.opacity)
+                }
                 if showHint {
                     Text("Drag to turn · Pinch to look closer · Tap to scatter light")
                         .font(.system(size: 12))
@@ -243,6 +271,7 @@ struct GemInteriorView: View {
     private func twistGesture(size: CGSize) -> some Gesture {
         DragGesture(minimumDistance: 2)
             .onChanged { value in
+                motion.touched()
                 let center = CGPoint(x: size.width / 2, y: size.height / 2)
                 let angle = atan2(value.location.y - center.y, value.location.x - center.x)
                 if let start = dragStartAngle {
@@ -261,6 +290,7 @@ struct GemInteriorView: View {
     private var pinchGesture: some Gesture {
         MagnifyGesture()
             .onChanged { value in
+                motion.touched()
                 let start = pinchStartZoom ?? zoom
                 pinchStartZoom = start
                 // Spreading your fingers looks closer, so the wedge spans less of the scene
@@ -288,6 +318,47 @@ struct GemInteriorView: View {
     /// 32-bit floats, which can't fold angles of millions of radians.
     private var tubeAngle: Double {
         (twist + motion.spinAngle).truncatingRemainder(dividingBy: 2 * .pi)
+    }
+
+    /// The words rise out of the light while you're still, and sink back when you move.
+    private func secret(_ engraving: SupabaseService.Engraving, size: CGSize) -> some View {
+        let amount = motion.revealAmount
+        return ZStack {
+            // The facets clear at the centre so the words can be read
+            RadialGradient(colors: [.black.opacity(0.7), .black.opacity(0.35), .clear],
+                           center: .center, startRadius: 0, endRadius: min(size.width, size.height) * 0.55)
+                .opacity(amount)
+                .allowsHitTesting(false)
+            VStack(spacing: 18) {
+                Text(engraving.text)
+                    .font(.system(size: 28, weight: .semibold, design: .serif))
+                    .foregroundStyle(LinearGradient(colors: [Color(red: 1, green: 0.93, blue: 0.7),
+                                                             Color(red: 0.93, green: 0.72, blue: 0.29)],
+                                                    startPoint: .top, endPoint: .bottom))
+                    .multilineTextAlignment(.center)
+                    .shadow(color: Color(red: 1, green: 0.8, blue: 0.4).opacity(0.8), radius: 12)
+                    .padding(.horizontal, 40)
+                    .scaleEffect(0.92 + 0.08 * amount)
+                    .blur(radius: (1 - amount) * 6)
+                    .allowsHitTesting(false)
+                Button("Hide for me") { confirmHide = true }
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .opacity(amount > 0.9 ? 1 : 0)
+                    .disabled(amount < 0.9)
+            }
+            .opacity(amount)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(amount > 0.5 ? "Engraved inside: \(engraving.text)" : "")
+    }
+
+    private func hideSecret() {
+        guard let id = engraving?.id else { return }
+        Task {
+            try? await SupabaseService.shared.hideEngraving(id: id)
+            withAnimation(.easeOut(duration: 0.4)) { engraving = nil }
+        }
     }
 
     /// Lift → pass through (buzz + flash) → inside.
@@ -348,6 +419,15 @@ enum OrientationLock {
 final class InteriorMotion {
     private(set) var spinAngle: Double = 0      // radians, wrapped
     private(set) var sceneTime: Double = 0      // seconds of scene drift, may run backwards
+    /// 0…1: how far a secret engraving has risen. Grows while you're still, sinks when you move.
+    private(set) var revealAmount: Double = 0
+    private(set) var isRevealed = false
+    /// Stays true after the first reveal, so the "be still" hint isn't repeated
+    private(set) var hasRevealed = false
+
+    @ObservationIgnored private var stillFor: TimeInterval = 0
+    @ObservationIgnored private var calm: Double = 1      // 1 = full motion, eases toward 0.1 while revealing
+    static let stillnessToReveal: TimeInterval = 2.2
 
     @ObservationIgnored private let manager = CMMotionManager()
     @ObservationIgnored private var reference: CMAttitude?
@@ -358,9 +438,10 @@ final class InteriorMotion {
     static let tiltSpin = 2.6           // extra radians per second per radian of roll
     static let tiltFlow = 6.0           // extra scene speed per radian of pitch
 
+    /// Any touch breaks the stillness.
+    func touched() { stillFor = 0 }
+
     func run(animated: Bool) async {
-        // Reduce Motion: no automatic movement, tilt included
-        guard animated else { return }
         if manager.isDeviceMotionAvailable {
             manager.deviceMotionUpdateInterval = 1.0 / 60
             manager.startDeviceMotionUpdates()
@@ -374,9 +455,29 @@ final class InteriorMotion {
             let dt = min(now.timeIntervalSince(last), 0.1)
             last = now
             readTilt()
-            spinAngle = (spinAngle + (Self.baseSpin + roll * Self.tiltSpin) * dt)
+            updateStillness(dt: dt)
+            // Reduce Motion: nothing moves on its own, tilt included; the secret can still be found
+            guard animated else { continue }
+            spinAngle = (spinAngle + (Self.baseSpin + roll * Self.tiltSpin) * calm * dt)
                 .truncatingRemainder(dividingBy: 2 * .pi)
-            sceneTime += (1 + pitch * Self.tiltFlow) * dt
+            sceneTime += (1 + pitch * Self.tiltFlow) * calm * dt
+        }
+    }
+
+    /// Still = no touches and the phone barely turning. Without a gyro, only touches count.
+    private func updateStillness(dt: Double) {
+        let rate = manager.deviceMotion?.rotationRate
+        let turning = rate.map { sqrt($0.x * $0.x + $0.y * $0.y + $0.z * $0.z) } ?? 0
+        if turning > 0.35 { stillFor = 0 } else { stillFor += dt }
+
+        let target: Double = stillFor >= Self.stillnessToReveal ? 1 : 0
+        // Rise slowly, sink quickly
+        revealAmount += (target - revealAmount) * (target > revealAmount ? 0.035 : 0.15)
+        calm += ((target == 1 ? 0.1 : 1) - calm) * 0.05
+        let revealed = revealAmount > 0.8
+        if revealed != isRevealed {
+            isRevealed = revealed
+            if revealed { hasRevealed = true }
         }
     }
 

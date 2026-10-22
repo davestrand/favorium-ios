@@ -255,6 +255,8 @@ final class SupabaseService {
         var isRename: Bool { eventType == "renamed" }
         /// A gem the zero-balance safety valve gave to someone with an empty shelf
         var isGift: Bool { eventType == "gifted" }
+        /// Someone sealed a secret message in the gem. Never carries the text; not custody.
+        var isEngraving: Bool { eventType == "engraved" }
 
         enum CodingKeys: String, CodingKey {
             case id, description
@@ -323,6 +325,89 @@ final class SupabaseService {
             case availableAt  = "available_at"
             case isResting    = "is_resting"
         }
+    }
+
+    // MARK: - Engravings (IOS_CONTRACT §17)
+    // One unsigned secret per gem, readable only by its current holder. Every rule
+    // (level, holder, cooldown, length, filter) is enforced server-side.
+
+    struct Engraving: Decodable, Identifiable, Sendable {
+        let id: UUID
+        let text: String
+        let created_at: String
+    }
+
+    struct EngravingStatus: Decodable, Sendable {
+        let eligible: Bool
+        let available_at: String?
+        let min_level: Int
+
+        /// When the author's 24h engraving cooldown ends, while it's still in the future
+        var restingUntil: Date? { SupabaseService.restingUntil(available_at) }
+    }
+
+    /// Live knobs; read them instead of hard-coding limits.
+    struct EngravingSettings: Decodable, Sendable {
+        let min_level: Int
+        let cooldown_hours: Double
+        let max_length: Int
+    }
+
+    struct EngraveResult: Decodable, Sendable {
+        let id: UUID
+        let created_at: String
+        let replaced: Bool
+    }
+
+    static let engravingRestingPrefix = "Engraving is resting"
+
+    /// The end time in "Engraving is resting — you can engrave again at <ISO>", if that's the error.
+    static func engravingRestingUntil(from error: Error) -> Date? {
+        let message = errorMessage(error)
+        guard message.hasPrefix(engravingRestingPrefix),
+              let raw = message.components(separatedBy: " at ").last else { return nil }
+        return PairingCode.parseTimestamp(raw.trimmingCharacters(in: .whitespaces))
+    }
+
+    /// The server's plain message (its error texts are meant to be shown verbatim).
+    static func errorMessage(_ error: Error) -> String {
+        (error as? PostgrestError)?.message ?? error.localizedDescription
+    }
+
+    func engraveCoin(coinId: UUID, text: String) async throws -> EngraveResult {
+        struct Params: Encodable { let p_coin_id: String; let p_text: String }
+        let response = try await client
+            .rpc("engrave_coin", params: Params(p_coin_id: coinId.uuidString, p_text: text))
+            .execute()
+        return try JSONDecoder().decode(EngraveResult.self, from: response.data)
+    }
+
+    /// Empty for gems nobody has engraved, and for anyone who doesn't hold the gem.
+    func coinEngravings(coinId: UUID) async throws -> [Engraving] {
+        struct Params: Encodable { let p_coin_id: String }
+        let response = try await client
+            .rpc("coin_engravings", params: Params(p_coin_id: coinId.uuidString))
+            .execute()
+        return (try? JSONDecoder().decode([Engraving].self, from: response.data)) ?? []
+    }
+
+    /// Hides the message for the current holder only; it stays for future holders.
+    func hideEngraving(id: UUID) async throws {
+        struct Params: Encodable { let p_engraving_id: String }
+        _ = try await client
+            .rpc("hide_engraving", params: Params(p_engraving_id: id.uuidString))
+            .execute()
+    }
+
+    func myEngravingStatus() async throws -> EngravingStatus {
+        let response = try await client.rpc("my_engraving_status").execute()
+        return try JSONDecoder().decode(EngravingStatus.self, from: response.data)
+    }
+
+    func engravingSettings() async throws -> EngravingSettings {
+        struct Settings: Decodable { let engraving: EngravingSettings }
+        let response = try await client.rpc("gem_economy_settings").execute()
+        return try JSONDecoder().decode(Settings.self, from: response.data).engraving
     }
 
     func coinJourney(coinID: UUID) async throws -> CoinJourneyPayload {

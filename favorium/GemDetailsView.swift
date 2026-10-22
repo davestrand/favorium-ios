@@ -60,6 +60,10 @@ struct GemDetailView: View {
     @State private var gemAppeared = false
     @State private var guideTopic: GemGuideView.Topic?
     @State private var showInterior = false
+    // Engraving (holder only; every rule is enforced server-side)
+    @State private var engravingStatus: SupabaseService.EngravingStatus?
+    @State private var hasEngraving = false
+    @State private var showEngrave = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -85,6 +89,18 @@ struct GemDetailView: View {
         }
         .background(FavoriumTheme.background.ignoresSafeArea())
         .task { await vm.load(coinId: coinId, userId: userId) }
+        .task(id: vm.journey?.isOwner) { await loadEngraving() }
+        .sheet(isPresented: $showEngrave) {
+            if let j = vm.journey {
+                EngraveGemView(coinId: coinId, gemName: j.name, dna: j.dna, transferCount: j.transferCount,
+                               isReplacing: hasEngraving) {
+                    Task {
+                        await vm.load(coinId: coinId, userId: userId)
+                        await loadEngraving()
+                    }
+                }
+            }
+        }
         .sheet(isPresented: $showRename) {
             if let j = vm.journey {
                 RenameGemView(coinId: coinId, currentName: j.name,
@@ -141,6 +157,13 @@ struct GemDetailView: View {
                 // ── Send button (owner, with a completed favor awaiting a gem) ─
                 else if j.isOwner == true && vm.hasFavorsAwaitingGem {
                     sendButton
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 28)
+                }
+
+                // ── Engrave (holder) ──────────────────────────────────────
+                if j.isOwner == true, let status = engravingStatus {
+                    engraveRow(status)
                         .padding(.horizontal, 24)
                         .padding(.bottom, 28)
                 }
@@ -213,7 +236,7 @@ struct GemDetailView: View {
         // Press and hold to step inside the gem
         .enterGemOnLongPress(
             isPresented: $showInterior,
-            interior: { GemInterior(name: j.name, dna: j.dna, transferCount: j.transferCount) },
+            interior: { GemInterior(name: j.name, dna: j.dna, transferCount: j.transferCount, coinId: coinId) },
             dna: j.dna, transferCount: j.transferCount)
         .frame(maxWidth: .infinity)
         .frame(height: 360)
@@ -483,6 +506,61 @@ struct GemDetailView: View {
         .accessibilityElement(children: .combine)
     }
 
+    // MARK: - Engraving
+
+    private func loadEngraving() async {
+        guard vm.journey?.isOwner == true else { engravingStatus = nil; return }
+        async let status = try? SupabaseService.shared.myEngravingStatus()
+        async let engravings = try? SupabaseService.shared.coinEngravings(coinId: coinId)
+        engravingStatus = await status
+        hasEngraving = !(await engravings ?? []).isEmpty
+    }
+
+    @ViewBuilder
+    private func engraveRow(_ status: SupabaseService.EngravingStatus) -> some View {
+        if status.eligible {
+            Button { showEngrave = true } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "seal.fill")
+                        .foregroundColor(FavoriumTheme.accent)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(hasEngraving ? "Replace the secret" : "Engrave a secret")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(FavoriumTheme.ivory)
+                        Text(hasEngraving ? "This gem holds a message. Yours would replace it."
+                                          : "Seal a few unsigned words inside for whoever holds it next.")
+                            .font(FavoriumTheme.captionFont)
+                            .foregroundColor(FavoriumTheme.ivoryDim)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12))
+                        .foregroundColor(FavoriumTheme.ivoryDim)
+                }
+                .padding(16)
+                .background(FavoriumTheme.surface)
+                .clipShape(RoundedRectangle(cornerRadius: FavoriumTheme.cardRadius))
+            }
+            .buttonStyle(.plain)
+        } else if let until = status.restingUntil {
+            Label {
+                Text("You can engrave again in \(Text(until, style: .relative)).")
+            } icon: {
+                Image(systemName: "seal")
+            }
+            .font(FavoriumTheme.captionFont)
+            .foregroundColor(FavoriumTheme.ivoryDim)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else if let title = HelperTitle(rawValue: status.min_level) {
+            // Something to aspire to, kept quiet
+            Label("Engraving opens at \(title.displayName)", systemImage: "lock")
+                .font(FavoriumTheme.captionFont)
+                .foregroundColor(FavoriumTheme.ivoryDim)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
     // MARK: - Journey timeline
 
     private func journeySection(_ j: SupabaseService.CoinJourneyPayload) -> some View {
@@ -564,7 +642,14 @@ struct GemDetailView: View {
         HStack(alignment: .top, spacing: 12) {
             // Timeline spine
             VStack(spacing: 0) {
-                if item.isGift {
+                if item.isEngraving {
+                    // A seal, not custody: someone left words inside
+                    Image(systemName: "seal.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(FavoriumTheme.accentMuted)
+                        .frame(width: 10, height: 12)
+                        .padding(.top, 3)
+                } else if item.isGift {
                     // A gift from Favorium is its own kind of step
                     Image(systemName: "gift.fill")
                         .font(.system(size: 10))
@@ -628,7 +713,7 @@ struct GemDetailView: View {
     /// The person to picture on a journey step: the other party on your own transfers,
     /// otherwise the recipient (for "minted", that's the creator). A rename shows who renamed it.
     private func timelinePerson(_ item: SupabaseService.CoinHistoryItem) -> (id: UUID?, name: String?, photo: String?, level: Int?) {
-        if item.isRename {
+        if item.isRename || item.isEngraving {
             return (item.fromId, item.fromName, item.fromAvatar, item.fromLevel)
         }
         if item.isToMe == true, item.isTransfer {
@@ -649,6 +734,8 @@ struct GemDetailView: View {
             return "\(from) → \(to)"
         case "renamed":
             return item.isFromMe == true ? "You renamed it" : "\(item.fromName ?? "Someone") renamed it"
+        case "engraved":
+            return item.isFromMe == true ? "You engraved a secret" : "\(item.fromName ?? "Someone") engraved a secret"
         case "gifted":
             return item.isToMe == true ? "Found its way to you" : "Found its way to \(item.toName ?? "someone")"
         default:

@@ -133,6 +133,11 @@ struct SendGemView: View {
 
     @State private var vm = SendGemViewModel()
     @State private var showRename = false
+    // A farewell engraving, offered to eligible holders before the gem leaves
+    @State private var canEngrave = false
+    @State private var gemHasEngraving = false
+    @State private var engravedNow = false
+    @State private var showEngrave = false
     @Environment(\.dismiss) private var dismiss
 
     init(
@@ -176,6 +181,22 @@ struct SendGemView: View {
                     vm.gem = gem.renamed(newName)
                 }
             }
+        }
+        .sheet(isPresented: $showEngrave) {
+            if let gem = vm.gem {
+                EngraveGemView(coinId: gem.id, gemName: gem.name, dna: gem.dna, transferCount: gem.transferCount,
+                               isReplacing: gemHasEngraving) {
+                    engravedNow = true
+                    canEngrave = false
+                }
+            }
+        }
+        .task(id: vm.gem?.id) {
+            guard let gem = vm.gem else { return }
+            async let status = try? SupabaseService.shared.myEngravingStatus()
+            async let existing = try? SupabaseService.shared.coinEngravings(coinId: gem.id)
+            canEngrave = await status?.eligible ?? false
+            gemHasEngraving = !(await existing ?? []).isEmpty
         }
         .task {
             vm.gem = initialGem
@@ -462,6 +483,38 @@ struct SendGemView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: FavoriumTheme.rowRadius))
                             }
                             .buttonStyle(.plain)
+                        }
+
+                        if canEngrave || engravedNow {
+                            Button { showEngrave = true } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: engravedNow ? "checkmark.seal.fill" : "seal.fill")
+                                        .foregroundColor(FavoriumTheme.accent)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(engravedNow ? "Your words are sealed inside"
+                                                         : "Engrave a message before it leaves you")
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundColor(FavoriumTheme.ivory)
+                                        Text(engravedNow ? "\(favor.helper_name ?? "They") can find them by stepping inside."
+                                             : gemHasEngraving ? "It already holds a secret; yours would replace it."
+                                             : "A few unsigned words for whoever holds it next.")
+                                            .font(FavoriumTheme.captionFont)
+                                            .foregroundColor(FavoriumTheme.ivoryDim)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                    Spacer(minLength: 0)
+                                    if !engravedNow {
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(FavoriumTheme.ivoryDim)
+                                    }
+                                }
+                                .padding(14)
+                                .background(FavoriumTheme.accent.opacity(0.08))
+                                .clipShape(RoundedRectangle(cornerRadius: FavoriumTheme.rowRadius))
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(engravedNow)
                         }
 
                         Text("Once given, this gem belongs to \(favor.helper_name ?? "them") and continues its journey from there.")

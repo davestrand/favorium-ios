@@ -308,7 +308,7 @@ private struct GemGridCell: View {
                         // Press and hold the gem to step inside it
                         .enterGemOnLongPress(
                             isPresented: $showInterior,
-                            interior: { GemInterior(name: coin.name ?? "Gem", dna: resolvedDNA, transferCount: transferCount) },
+                            interior: { GemInterior(name: coin.name ?? "Gem", dna: resolvedDNA, transferCount: transferCount, coinId: coin.id) },
                             dna: resolvedDNA, transferCount: transferCount)
                     }
                     .frame(maxWidth: .infinity)
