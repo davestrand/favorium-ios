@@ -947,6 +947,29 @@ final class SupabaseService {
         return try JSONDecoder().decode([BlockedPerson].self, from: response.data)
     }
 
+    // MARK: - Account pause (IOS_CONTRACT §19.5)
+
+    /// The signed-in user's active pause. `reason` is deliberately not decoded: it's a
+    /// staff-only note that can name the reporter and quote them (§19 iOS handoff §4).
+    struct AccountPause: Decodable, Equatable, Sendable {
+        let muted_until: String?
+        let paused_since: String?
+
+        /// nil = paused until a person lifts it
+        var until: Date? { muted_until.flatMap(PairingCode.parseTimestamp) }
+
+        /// Still in force at `date` (an open-ended pause always is)
+        func isActive(at date: Date = .now) -> Bool {
+            until.map { $0 > date } ?? true
+        }
+    }
+
+    /// Zero rows when not paused; the function returns a table, so it arrives as an array.
+    func myPause() async throws -> AccountPause? {
+        let response = try await client.rpc("my_pause").execute()
+        return try JSONDecoder().decode([AccountPause].self, from: response.data).first
+    }
+
     // MARK: - Helper Types for Nested Decoding
     private struct RawFavor: Decodable {
         let id: UUID

@@ -39,6 +39,8 @@ struct ContentView: View {
         .task {
             await appVM.bootstrap()
         }
+        // A pause can land while the app is open; re-checked on foreground and each minute
+        .modifier(AccountPauseWatcher(appVM: appVM))
         // Live favor updates for whoever is signed in; stops on sign-out
         .task(id: appVM.userId) {
             if let userId = appVM.userId {

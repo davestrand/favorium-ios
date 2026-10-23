@@ -20,6 +20,8 @@ struct EngraveGemView: View {
     var onEngraved: () -> Void = {}
 
     @Environment(\.dismiss) private var dismiss
+    /// Optional so previews without the app shell still render
+    @Environment(AppViewModel.self) private var appVM: AppViewModel?
     @State private var text = ""
     @State private var maxLength: Int?
     @State private var isSaving = false
@@ -58,6 +60,10 @@ struct EngraveGemView: View {
                 .padding(.top, 16)
 
                 FavorGemView(dna: dna, transferCount: transferCount, size: 110)
+
+                if let pause = appVM?.pause {
+                    AccountPauseBanner(pause: pause, blockedAction: "write a message inside a gem")
+                }
 
                 VStack(spacing: 6) {
                     Text(isReplacing ? "Replace the secret" : "Engrave a secret")

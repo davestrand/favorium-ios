@@ -29,6 +29,17 @@ final class AppViewModel {
 
     var helperTitle: HelperTitle? { HelperTitle(rawValue: helperLevel) }
 
+    // MARK: - Account pause (server is the authority; never cached on device)
+    var pause: SupabaseService.AccountPause?
+
+    /// Re-reads the pause. Keeps the last known value if the network call fails.
+    @MainActor
+    func refreshPause() async {
+        guard userId != nil else { pause = nil; return }
+        guard let latest = try? await SupabaseService.shared.myPause() else { return }
+        pause = latest
+    }
+
     // MARK: - Shared loading flag (used by tabs during first load)
     var isBootstrapping: Bool = true
 
@@ -101,6 +112,7 @@ final class AppViewModel {
         helperLevel = 0
         peopleHelped = 0
         titleToCelebrate = nil
+        pause = nil
         isAuthenticated = false
     }
 }

@@ -68,6 +68,12 @@ struct ProfileTabView: View {
                             .padding(.top, 28)
                             .padding(.bottom, 24)
 
+                        if let pause = appVM.pause {
+                            AccountPauseNotice(pause: pause)
+                                .padding(.horizontal, 16)
+                                .padding(.bottom, 24)
+                        }
+
                         // ── Avatar / name ─────────────────────────────
                         avatarSection
                             .padding(.horizontal, 24)

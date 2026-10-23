@@ -114,6 +114,8 @@ struct OfferHelpView: View {
 
     @State private var vm = OfferHelpViewModel()
     @Environment(\.dismiss) private var dismiss
+    /// Optional so previews without the app shell still render
+    @Environment(AppViewModel.self) private var appVM: AppViewModel?
 
     var body: some View {
         ZStack {
@@ -166,6 +168,10 @@ struct OfferHelpView: View {
                     Color.clear.frame(width: 40, height: 40)
                 }
                 .padding(.top, 16)
+
+                if let pause = appVM?.pause {
+                    AccountPauseBanner(pause: pause, blockedAction: "send a new Favor request")
+                }
 
                 Text("Offer to do something kind for someone you're connected with. Once they accept and confirm it's done, they can thank you with a gem.")
                     .font(FavoriumTheme.captionFont)
