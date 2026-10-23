@@ -191,9 +191,6 @@ struct GemInteriorView: View {
                 }
             }
         }
-        // Tilt steers the kaleidoscope, so the screen itself must not rotate
-        .onAppear { OrientationLock.set(.portrait) }
-        .onDisappear { OrientationLock.set(.all) }
         .task {
             if scene == nil { scene = InteriorScene(interior: interior) }
             await diveIn()
@@ -403,24 +400,6 @@ struct GemInteriorView: View {
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) { dismiss() }
-        }
-    }
-}
-
-// MARK: - Orientation lock
-
-enum OrientationLock {
-    @MainActor
-    static func set(_ mask: UIInterfaceOrientationMask) {
-        AppDelegate.orientationLock = mask
-        for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
-            // Tell every controller in the chain, including the full-screen cover itself
-            var controller = scene.keyWindow?.rootViewController
-            while let current = controller {
-                current.setNeedsUpdateOfSupportedInterfaceOrientations()
-                controller = current.presentedViewController
-            }
-            scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { _ in }
         }
     }
 }

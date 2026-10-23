@@ -18,12 +18,7 @@ final class SupabaseManager {
         guard let dict = NSDictionary(contentsOfFile: path) as? [String: Any] else {
             fatalError("SupabaseConfig.plist could not be read as a dictionary. Check the file format.")
         }
-        
-        // Temporary diagnostic — remove after fixing
-        print("Plist keys found:", dict.keys.sorted())
-        print("SUPABASE_URL value:", dict["SUPABASE_URL"] as Any)
 
-        
         guard let urlString = dict["SUPABASE_URL"] as? String, !urlString.isEmpty else {
             fatalError("SupabaseConfig.plist is missing the SUPABASE_URL key or it is empty.")
         }

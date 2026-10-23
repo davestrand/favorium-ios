@@ -21,26 +21,6 @@ final class SupabaseService {
         SupabaseClient(supabaseURL: supabaseURL, supabaseKey: supabaseAnonKey)
     }()
 
-    func testCoinsCount() async throws -> String {
-        // Using Supabase SDK: select a single row from public.coins to validate connectivity.
-        struct Coin: Decodable { let id: UUID }
-
-        // Request a small payload and decode from raw response data for broad SDK compatibility
-        let response = try await client
-            .from("coins")
-            .select("id")
-            .limit(1)
-            .execute()
-
-        let coins = try JSONDecoder().decode([Coin].self, from: response.data)
-
-        if coins.isEmpty {
-            return "Supabase coins reachable (0 rows)"
-        } else {
-            return "Supabase coins reachable (1+ rows)"
-        }
-    }
-    
     // MARK: - Auth
     struct AuthSession: Sendable {
         let userId: String?
@@ -570,30 +550,6 @@ final class SupabaseService {
             .execute()
     }
     
-    /// Legacy method - may need to be split into complete_favor + transfer_coin
-    /// depending on your actual RPC implementation
-    /// If complete_favor_and_mint RPC doesn't exist, this should be refactored
-    func completeFavorAndMintCoin(favorId: UUID, coinName: String) async throws -> UUID {
-        struct CompleteMintParams: Encodable {
-            let p_favor_id: String
-            let p_coin_name: String
-        }
-        
-        // Call RPC that handles the complete workflow
-        let response = try await client
-            .rpc("complete_favor_and_mint", params: CompleteMintParams(
-                p_favor_id: favorId.uuidString,
-                p_coin_name: coinName
-            ))
-            .execute()
-        
-        struct MintResult: Decodable {
-            let coin_id: UUID
-        }
-        
-        let result = try JSONDecoder().decode(MintResult.self, from: response.data)
-        return result.coin_id
-    }
     
     // MARK: - Connections/Users
     struct UserProfile: Decodable, Identifiable, Sendable {
