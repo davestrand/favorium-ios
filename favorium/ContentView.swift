@@ -13,6 +13,8 @@ struct ContentView: View {
     @State private var selectedTab: Tab = .collection
     @State private var notifications = FavorNotificationCenter()
     @State private var push = PushManager.shared
+    /// The title sheet is up, so a gem arrival waits for it (one sheet at a time)
+    @State private var titleIsShowing = false
     @Environment(\.scenePhase) private var scenePhase
 
     enum Tab { case collection, favors, profile }
@@ -64,9 +66,21 @@ struct ContentView: View {
         .onChange(of: notifications.changeToken) { _, _ in
             Task { await appVM.refreshTitle() }
         }
-        .sheet(item: $appVM.titleToCelebrate) { title in
+        // A gem arriving often earns a title too: the gem comes first, the title right after
+        .sheet(item: Binding(
+            get: { titleIsShowing ? nil : notifications.arrivalToCelebrate },
+            set: { notifications.arrivalToCelebrate = $0 }
+        )) { arrival in
+            FavorGivenView(given: arrival)
+        }
+        .sheet(item: Binding(
+            // Once up, the title sheet stays up even if a gem arrives meanwhile
+            get: { (notifications.arrivalToCelebrate == nil || titleIsShowing) ? appVM.titleToCelebrate : nil },
+            set: { appVM.titleToCelebrate = $0 }
+        ), onDismiss: { titleIsShowing = false }) { title in
             TitleEarnedView(title: title, userId: appVM.userId, name: appVM.displayName,
                             photo: appVM.avatarURL, peopleHelped: appVM.peopleHelped)
+                .onAppear { titleIsShowing = true }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {

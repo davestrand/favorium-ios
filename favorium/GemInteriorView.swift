@@ -106,6 +106,7 @@ struct GemInteriorView: View {
     /// The gem's one secret, if someone engraved it and you hold it
     @State private var engraving: SupabaseService.Engraving?
     @State private var confirmHide = false
+    @State private var reportingSecret = false
 
     var body: some View {
         GeometryReader { geo in
@@ -177,6 +178,18 @@ struct GemInteriorView: View {
             Button("Hide it for me", role: .destructive) { hideSecret() }
         } message: {
             Text("You won't see it again in this gem. It stays for whoever holds the gem next.")
+        }
+        .sheet(isPresented: $reportingSecret) {
+            if let engraving {
+                // Reporting also hides it for the reporter, so refetch afterwards
+                ReportView(target: .engraving, targetId: engraving.id, subject: "this message") {
+                    Task {
+                        guard let coinId = interior.coinId else { return }
+                        let latest = try? await SupabaseService.shared.coinEngravings(coinId: coinId).last
+                        withAnimation(.easeOut(duration: 0.4)) { self.engraving = latest }
+                    }
+                }
+            }
         }
         // Tilt steers the kaleidoscope, so the screen itself must not rotate
         .onAppear { OrientationLock.set(.portrait) }
@@ -341,11 +354,14 @@ struct GemInteriorView: View {
                     .scaleEffect(0.92 + 0.08 * amount)
                     .blur(radius: (1 - amount) * 6)
                     .allowsHitTesting(false)
-                Button("Hide for me") { confirmHide = true }
-                    .font(.system(size: 12))
-                    .foregroundStyle(.white.opacity(0.6))
-                    .opacity(amount > 0.9 ? 1 : 0)
-                    .disabled(amount < 0.9)
+                HStack(spacing: 24) {
+                    Button("Hide for me") { confirmHide = true }
+                    Button("Report") { reportingSecret = true }
+                }
+                .font(.system(size: 12))
+                .foregroundStyle(.white.opacity(0.6))
+                .opacity(amount > 0.9 ? 1 : 0)
+                .disabled(amount < 0.9)
             }
             .opacity(amount)
         }

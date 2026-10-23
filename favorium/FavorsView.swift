@@ -191,6 +191,8 @@ struct FavorsView: View {
     @State private var cancelling: SupabaseService.Favor?
     @State private var showConnect = false
     @State private var viewingFavor: SupabaseService.Favor?
+    @State private var reportingPerson: SafetyPerson?
+    @State private var blockingPerson: SafetyPerson?
 
     var body: some View {
         NavigationStack {
@@ -298,6 +300,7 @@ struct FavorsView: View {
             .sheet(item: $givingGemFor) { favor in
                 SendGemView(initialFavor: favor, userId: appVM.userId) { reload() }
             }
+            .personSafetyActions(reporting: $reportingPerson, blocking: $blockingPerson) { reload() }
             .confirmationDialog(
                 cancelling.map { cancelTitle(for: $0) } ?? "",
                 isPresented: Binding(
@@ -349,7 +352,8 @@ struct FavorsView: View {
                             favor: favor,
                             isActing: vm.actingOn.contains(favor.id),
                             onAccept: { act { await vm.accept(favor, userId: $0) } },
-                            onDecline: { act { await vm.decline(favor, userId: $0) } }
+                            onDecline: { act { await vm.decline(favor, userId: $0) } },
+                            menu: menu(for: favor)
                         )
                         .transition(.move(edge: .top).combined(with: .opacity))
                     }
@@ -368,6 +372,7 @@ struct FavorsView: View {
                                 givingGemFor = favor
                             },
                             cancel: nil,
+                            menu: menu(for: favor),
                             isActing: vm.actingOn.contains(favor.id)
                         )
                         .transition(.move(edge: .top).combined(with: .opacity))
@@ -387,6 +392,7 @@ struct FavorsView: View {
                                 act { await vm.complete(favor, userId: $0) }
                             },
                             cancel: .init(label: cancelLabel(for: favor)) { cancelling = favor },
+                            menu: menu(for: favor),
                             isActing: vm.actingOn.contains(favor.id)
                         )
                         .transition(.move(edge: .top).combined(with: .opacity))
@@ -406,6 +412,7 @@ struct FavorsView: View {
                             // Cancellable until the helped person confirms it's done
                             cancel: favor.isCompleted ? nil
                                 : .init(label: cancelLabel(for: favor)) { cancelling = favor },
+                            menu: menu(for: favor),
                             isActing: vm.actingOn.contains(favor.id)
                         )
                         .transition(.move(edge: .top).combined(with: .opacity))
@@ -413,6 +420,18 @@ struct FavorsView: View {
                 }
             }
         }
+    }
+
+    /// Details / report / block for the other person on a pending favor
+    private func menu(for favor: SupabaseService.Favor) -> FavorStatusCard.MoreMenu {
+        let other = favor.other(appVM.userId)
+        let person = SafetyPerson(id: other.id, name: other.name ?? "this person")
+        return .init(
+            personName: person.name,
+            onDetails: { viewingFavor = favor },
+            onReport: { reportingPerson = person },
+            onBlock: { blockingPerson = person }
+        )
     }
 
     /// What the helper is waiting on, at each stage
@@ -569,6 +588,7 @@ private struct IncomingPendingCard: View {
     let isActing: Bool
     let onAccept: () -> Void
     let onDecline: () -> Void
+    var menu: FavorStatusCard.MoreMenu? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -584,6 +604,9 @@ private struct IncomingPendingCard: View {
                             .foregroundColor(FavoriumTheme.ivory)
                         Spacer()
                         FavorStatusBadge(label: "Awaiting your reply", color: FavoriumTheme.gold)
+                        if let menu {
+                            FavorMoreMenuButton(menu: menu)
+                        }
                     }
                     Text(favor.description)
                         .font(FavoriumTheme.bodyFont)
@@ -658,9 +681,18 @@ private struct FavorStatusCard: View {
         let perform: () -> Void
     }
 
+    /// Details / report / block for the other person
+    struct MoreMenu {
+        let personName: String
+        let onDetails: () -> Void
+        let onReport: () -> Void
+        let onBlock: () -> Void
+    }
+
     let badge: (String, Color)
     let action: Action?
     let cancel: Cancel?
+    var menu: MoreMenu? = nil
     let isActing: Bool
 
     var body: some View {
@@ -677,6 +709,10 @@ private struct FavorStatusCard: View {
                         .lineLimit(2)
                     FavorStatusBadge(label: badge.0, color: badge.1)
                         .padding(.top, 2)
+                }
+                if let menu {
+                    Spacer(minLength: 0)
+                    FavorMoreMenuButton(menu: menu)
                 }
             }
 
@@ -715,6 +751,26 @@ private struct FavorStatusCard: View {
             RoundedRectangle(cornerRadius: FavoriumTheme.cardRadius)
                 .stroke(FavoriumTheme.accentMuted.opacity(0.25), lineWidth: 1)
         )
+    }
+}
+
+/// The ••• on a pending card: see the favor, or report / block the other person
+private struct FavorMoreMenuButton: View {
+    let menu: FavorStatusCard.MoreMenu
+
+    var body: some View {
+        Menu {
+            Button("Details", systemImage: "info.circle", action: menu.onDetails)
+            Button("Report \(menu.personName)", systemImage: "flag", action: menu.onReport)
+            Button("Block \(menu.personName)", systemImage: "hand.raised.slash", role: .destructive, action: menu.onBlock)
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(FavoriumTheme.ivoryDim)
+                .frame(width: 32, height: 32)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel("More")
     }
 }
 

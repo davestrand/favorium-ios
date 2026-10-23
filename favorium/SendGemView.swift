@@ -561,33 +561,10 @@ struct SendGemView: View {
     // MARK: - Done / Failure
 
     private var doneView: some View {
-        VStack(spacing: 24) {
-            Spacer()
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 64))
-                .foregroundColor(FavoriumTheme.accent)
-            Text("Gem given!")
-                .font(.system(size: 28, weight: .bold, design: .serif))
-                .foregroundColor(FavoriumTheme.ivory)
-            Text("\(vm.gem?.name ?? "Your gem") is now with \(vm.favor?.helper_name ?? "them"). Thank you for passing on the kindness.")
-                .font(FavoriumTheme.bodyFont)
-                .foregroundColor(FavoriumTheme.ivoryDim)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
-            Spacer()
-            Button {
-                onComplete()
-                dismiss()
-            } label: {
-                Text("Done")
-                    .fontWeight(.semibold)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .metallicGoldCapsule()
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 40)
-        }
+        FavorGivenView(
+            given: FavorGiven(gem: vm.gem, helperName: vm.favor?.helper_name ?? "them"),
+            onDone: onComplete
+        )
     }
 
     private func failureView(_ message: String) -> some View {

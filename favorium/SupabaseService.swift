@@ -871,6 +871,82 @@ final class SupabaseService {
         return try JSONDecoder().decode(UserProfile.self, from: response.data)
     }
     
+    /// Gems by id (e.g. one that just arrived, for showing its art)
+    func coins(ids: [UUID]) async throws -> [CoinSummary] {
+        guard !ids.isEmpty else { return [] }
+        let response = try await client
+            .from("coins")
+            .select("id,serial,name,transfer_count,creator_id,owner_id,created_at,dna,available_at")
+            .in("id", values: ids.map(\.uuidString))
+            .execute()
+        return try JSONDecoder().decode([CoinSummary].self, from: response.data)
+    }
+
+    // MARK: - Reporting & Blocking (IOS_CONTRACT §18, App Store 1.2)
+
+    enum ReportTarget: String, Sendable { case user, favor, engraving }
+
+    enum ReportReason: String, CaseIterable, Identifiable, Sendable {
+        case harassment, scam_or_nonpayment, inappropriate, other
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .harassment:         "Harassment or bullying"
+            case .scam_or_nonpayment: "Scam or didn\u{2019}t keep their word"
+            case .inappropriate:      "Inappropriate content"
+            case .other:              "Something else"
+            }
+        }
+    }
+
+    /// Write-only: there's no way to read reports back. The server resolves engraving authors.
+    func reportContent(target: ReportTarget, targetId: UUID, reason: ReportReason, details: String?) async throws {
+        struct Params: Encodable {
+            let p_target_kind: String
+            let p_target_id: String
+            let p_reason: String
+            let p_details: String?
+        }
+        _ = try await client
+            .rpc("report_content", params: Params(p_target_kind: target.rawValue, p_target_id: targetId.uuidString,
+                                                 p_reason: reason.rawValue, p_details: details))
+            .execute()
+    }
+
+    struct BlockResult: Decodable, Sendable {
+        let blocked: Bool?
+        let cancelled_favors: Int?
+    }
+
+    struct BlockedPerson: Decodable, Identifiable, Sendable {
+        let user_id: UUID
+        let display_name: String?
+        let avatar_url: String?
+        let blocked_at: String?
+        var id: UUID { user_id }
+    }
+
+    /// Hides the connection both ways and cancels every open favor between you.
+    func blockUser(_ userId: UUID) async throws -> BlockResult {
+        struct Params: Encodable { let p_user_id: String }
+        let response = try await client
+            .rpc("block_user", params: Params(p_user_id: userId.uuidString))
+            .execute()
+        return try JSONDecoder().decode(BlockResult.self, from: response.data)
+    }
+
+    func unblockUser(_ userId: UUID) async throws {
+        struct Params: Encodable { let p_user_id: String }
+        _ = try await client
+            .rpc("unblock_user", params: Params(p_user_id: userId.uuidString))
+            .execute()
+    }
+
+    func myBlocks() async throws -> [BlockedPerson] {
+        let response = try await client.rpc("my_blocks").execute()
+        return try JSONDecoder().decode([BlockedPerson].self, from: response.data)
+    }
+
     // MARK: - Helper Types for Nested Decoding
     private struct RawFavor: Decodable {
         let id: UUID

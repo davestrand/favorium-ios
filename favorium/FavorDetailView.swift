@@ -31,6 +31,8 @@ extension SupabaseService.Favor {
             return mine ? "\(other) declined your offer" : "You declined \(other)\u{2019}s offer"
         }
         if isCancelled { return mine ? "Favor with \(other) cancelled" : "\(other)\u{2019}s favor cancelled" }
+        if isAccepted { return mine ? "You\u{2019}re helping \(other)" : "\(other) is helping you" }
+        if isProposed { return mine ? "You offered to help \(other)" : "\(other) offered to help" }
         return "Past favor"
     }
 
@@ -38,6 +40,8 @@ extension SupabaseService.Favor {
         if isTransferred { return ("Gem given", "gift") }
         if isDeclined    { return ("Declined", "xmark.circle") }
         if isCancelled   { return ("Cancelled", "minus.circle") }
+        if isAccepted    { return ("In progress", "hammer") }
+        if isProposed    { return ("Offered", "hand.raised") }
         return ("Completed", "checkmark.circle")
     }
 }
@@ -51,6 +55,9 @@ struct FavorDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var gemName: String?
     @State private var showGem = false
+    @State private var reportingFavor = false
+    @State private var reportingPerson: SafetyPerson?
+    @State private var blockingPerson: SafetyPerson?
 
     private struct Step: Identifiable {
         let id = UUID()
@@ -80,6 +87,10 @@ struct FavorDetailView: View {
                 gemName = try? await SupabaseService.shared.coinName(coinId: coinId)
             }
         }
+        .sheet(isPresented: $reportingFavor) {
+            ReportView(target: .favor, targetId: favor.id, subject: "this favor")
+        }
+        .personSafetyActions(reporting: $reportingPerson, blocking: $blockingPerson) { dismiss() }
         .sheet(isPresented: $showGem) {
             if let coinId = favor.coin_id {
                 GemDetailView(coinId: coinId, coinName: gemName ?? "Gem", userId: userId)
@@ -103,9 +114,31 @@ struct FavorDetailView: View {
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(FavoriumTheme.ivory)
             Spacer()
-            Color.clear.frame(width: 40, height: 40)
+            moreMenu
         }
         .padding(.top, 16)
+    }
+
+    private var moreMenu: some View {
+        let other = favor.other(userId)
+        let person = SafetyPerson(id: other.id, name: other.name ?? "this person")
+        return Menu {
+            Button("Report this favor", systemImage: "flag") { reportingFavor = true }
+            Button("Report \(person.name)", systemImage: "person.crop.circle.badge.exclamationmark") {
+                reportingPerson = person
+            }
+            Button("Block \(person.name)", systemImage: "hand.raised.slash", role: .destructive) {
+                blockingPerson = person
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(FavoriumTheme.ivory)
+                .frame(width: 40, height: 40)
+                .background(FavoriumTheme.surface)
+                .clipShape(Circle())
+        }
+        .accessibilityLabel("More")
     }
 
     private var header: some View {

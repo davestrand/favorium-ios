@@ -33,6 +33,8 @@ final class FavorNotificationCenter {
     private(set) var changeToken = 0
     /// Favors waiting on this user (contract §8): offers to answer + gems you owe
     private(set) var actionCount = 0
+    /// A gem that arrived for help this user gave, not yet celebrated on this device
+    var arrivalToCelebrate: FavorGiven?
 
     private var userId: UUID?
     private var channel: RealtimeChannelV2?
@@ -85,6 +87,7 @@ final class FavorNotificationCenter {
             print("⚠️ Favor live updates unavailable: \(error)")
         }
         await refreshActionCount()
+        await checkArrivals()
     }
 
     @MainActor
@@ -98,6 +101,7 @@ final class FavorNotificationCenter {
         userId = nil
         banner = nil
         actionCount = 0
+        arrivalToCelebrate = nil
     }
 
     /// Call right before the user changes a favor themselves (accept, cancel, …)
@@ -111,6 +115,7 @@ final class FavorNotificationCenter {
         guard userId != nil else { return }
         changeToken += 1
         await refreshActionCount()
+        await checkArrivals()
     }
 
     @MainActor
@@ -125,6 +130,7 @@ final class FavorNotificationCenter {
     private func handle(record: [String: AnyJSON], iAmHelper: Bool, isInsert: Bool) async {
         changeToken += 1
         await refreshActionCount()
+        if iAmHelper, record["status"]?.stringValue == "transferred" { await checkArrivals() }
 
         guard let favorId = record["id"]?.stringValue.flatMap(UUID.init(uuidString:)),
               let status = record["status"]?.stringValue else { return }
@@ -216,6 +222,7 @@ final class FavorNotificationCenter {
     func receivedForegroundPush(title: String, body: String?, favorId: String?, kind: String?) async {
         changeToken += 1
         await refreshActionCount()
+        if kind == "transferred" { await checkArrivals() }
         // "gift" is the zero-balance safety valve, "nudge" points back to helping (PUSH_CONTRACT §7.2),
         // "title" announces a new helper title
         let icon = switch kind {
@@ -242,6 +249,43 @@ final class FavorNotificationCenter {
             guard !Task.isCancelled else { return }
             self?.banner = nil
         }
+    }
+
+    // MARK: - Gem arrivals
+
+    /// Looks for gems that reached this user (as helper) since the last celebration on this
+    /// device. Works however the news came — live update, push, or simply opening the app.
+    /// The first run only sets the marker, so past gems are never celebrated.
+    @MainActor
+    func checkArrivals() async {
+        guard let userId, arrivalToCelebrate == nil,
+              let outgoing = try? await SupabaseService.shared.myOutgoingFavors(userId: userId) else { return }
+        let key = "celebratedArrivalsAt.\(userId.uuidString.lowercased())"
+        let defaults = UserDefaults.standard
+        guard let marker = defaults.object(forKey: key) as? Date else {
+            defaults.set(Date(), forKey: key)
+            return
+        }
+
+        let arrivals = outgoing
+            .filter { $0.isTransferred && $0.coin_id != nil }
+            .compactMap { favor in
+                favor.transferred_at.flatMap(SupabaseService.PairingCode.parseTimestamp).map { (favor, $0) }
+            }
+            .filter { $0.1 > marker }
+            .sorted { $0.1 > $1.1 }
+        guard let (newest, at) = arrivals.first, let coinId = newest.coin_id else { return }
+        // Recorded before showing, so a sheet dismissed mid-way never repeats
+        defaults.set(at, forKey: key)
+
+        let gem = (try? await SupabaseService.shared.coins(ids: [coinId]))?.first.map(GiftableGem.init)
+        arrivalToCelebrate = FavorGiven(
+            kind: .received,
+            gem: gem,
+            helperName: newest.helped_name ?? "Someone",
+            favorDescription: newest.description,
+            alsoArrived: arrivals.count - 1
+        )
     }
 
     // MARK: - Helpers

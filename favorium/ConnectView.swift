@@ -169,6 +169,9 @@ struct ConnectView: View {
     let userId: UUID?
 
     @State private var vm: ConnectViewModel
+    @State private var reportingPerson: SafetyPerson?
+    @State private var blockingPerson: SafetyPerson?
+    @State private var showBlocked = false
     @Environment(\.dismiss) private var dismiss
     @FocusState private var codeFieldFocused: Bool
 
@@ -199,6 +202,14 @@ struct ConnectView: View {
                     inviteCard
                     redeemCard
                     circleSection
+
+                    Button { showBlocked = true } label: {
+                        Label("Blocked people", systemImage: "hand.raised.slash")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(FavoriumTheme.ivoryDim)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.plain)
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 40)
@@ -213,6 +224,14 @@ struct ConnectView: View {
             async let restore: Void = vm.restoreInvite(userId: userId)
             async let circle: Void = vm.loadCircle(userId: userId)
             _ = await (restore, circle)
+        }
+        .personSafetyActions(reporting: $reportingPerson, blocking: $blockingPerson) {
+            if let userId { Task { await vm.loadCircle(userId: userId) } }
+        }
+        .sheet(isPresented: $showBlocked, onDismiss: {
+            if let userId { Task { await vm.loadCircle(userId: userId) } }
+        }) {
+            BlockedPeopleView()
         }
         // Polls only while a live code is showing; restarts when the code changes
         .task(id: vm.invite) {
@@ -447,9 +466,24 @@ struct ConnectView: View {
                                     .foregroundColor(FavoriumTheme.ivoryDim)
                             }
                             Spacer()
+                            Menu {
+                                Button("Report \(member.displayName)", systemImage: "flag") {
+                                    reportingPerson = SafetyPerson(id: member.id, name: member.displayName)
+                                }
+                                Button("Block \(member.displayName)", systemImage: "hand.raised.slash", role: .destructive) {
+                                    blockingPerson = SafetyPerson(id: member.id, name: member.displayName)
+                                }
+                            } label: {
+                                Image(systemName: "ellipsis")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(FavoriumTheme.ivoryDim)
+                                    .frame(width: 32, height: 32)
+                                    .contentShape(Rectangle())
+                            }
+                            .accessibilityLabel("More for \(member.displayName)")
                         }
                         .padding(.vertical, 10)
-                        .accessibilityElement(children: .combine)
+                        .accessibilityElement(children: .contain)
                         if member.id != vm.circle.last?.id {
                             Divider().overlay(FavoriumTheme.accentMuted.opacity(0.2))
                         }
