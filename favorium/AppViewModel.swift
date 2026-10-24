@@ -29,6 +29,9 @@ final class AppViewModel {
 
     var helperTitle: HelperTitle? { HelperTitle(rawValue: helperLevel) }
 
+    /// The profile came back marked deleted (e.g. deleted from another device); ContentView signs out
+    var accountWasDeleted = false
+
     // MARK: - Account pause (server is the authority; never cached on device)
     var pause: SupabaseService.AccountPause?
 
@@ -71,6 +74,7 @@ final class AppViewModel {
         displayName = [profileName, session.signUpDisplayName]
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .first { !$0.isEmpty } ?? ""
+        if profile?.deleted_at != nil { accountWasDeleted = true; return }
         if let profile { applyTitle(from: profile) }
     }
 
@@ -79,6 +83,7 @@ final class AppViewModel {
     func refreshTitle() async {
         guard let userId,
               let profile = try? await SupabaseService.shared.getUserProfile(userId: userId) else { return }
+        if profile.deleted_at != nil { accountWasDeleted = true; return }
         applyTitle(from: profile)
     }
 
@@ -100,6 +105,14 @@ final class AppViewModel {
         "celebratedHelperLevel.\(userId.uuidString.lowercased())"
     }
 
+    /// Deletes the account, then signs out locally. The server has already ended the session,
+    /// so local sign-out mustn't try to re-authenticate or treat a failure as an error.
+    @MainActor
+    func deleteAccount(authVM: AuthViewModel) async throws {
+        try await SupabaseService.shared.deleteAccount()
+        await signOut(authVM: authVM)
+    }
+
     @MainActor
     func signOut(authVM: AuthViewModel) async {
         // Remove this phone's push token while the session is still valid
@@ -113,6 +126,7 @@ final class AppViewModel {
         peopleHelped = 0
         titleToCelebrate = nil
         pause = nil
+        accountWasDeleted = false
         isAuthenticated = false
     }
 }

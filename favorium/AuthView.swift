@@ -15,6 +15,7 @@ struct AuthView: View {
 
     private enum Field { case email, password, displayName }
     @FocusState private var focused: Field?
+    @State private var showForgotPassword = false
 
     var body: some View {
         @Bindable var vm = vm
@@ -69,6 +70,13 @@ struct AuthView: View {
 
                     submitButton
 
+                    if vm.mode == .signIn {
+                        Button("Forgot password?") { showForgotPassword = true }
+                            .font(FavoriumTheme.captionFont)
+                            .foregroundColor(FavoriumTheme.accent)
+                            .backdropLegible()
+                    }
+
                     if vm.isAuthenticated {
                         VStack(spacing: 8) {
                             Text("Signed in!")
@@ -90,6 +98,9 @@ struct AuthView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .animation(.easeInOut(duration: 0.25), value: vm.mode)
+        .sheet(isPresented: $showForgotPassword) {
+            ForgotPasswordView(initialEmail: vm.email)
+        }
     }
 
     // MARK: - Header
@@ -197,6 +208,111 @@ struct AuthView: View {
         .buttonStyle(.plain)
         .disabled(isSubmitDisabled)
         .opacity(isSubmitDisabled && !vm.isLoading ? 0.5 : 1)
+    }
+}
+
+// MARK: - Forgot password
+
+/// Sends the reset email. The link opens favorium.app/reset in the browser, where the new
+/// password is set; afterwards the person signs in here as normal. Nothing comes back to
+/// the app, and the message never reveals whether an address has an account.
+private struct ForgotPasswordView: View {
+    let initialEmail: String
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var email = ""
+    @State private var isSending = false
+    @State private var sent = false
+    @State private var error: String?
+    @FocusState private var focused: Bool
+
+    private var trimmed: String { email.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var canSend: Bool { trimmed.contains("@") && !isSending }
+
+    var body: some View {
+        ZStack {
+            FavoriumTheme.background.ignoresSafeArea()
+
+            VStack(alignment: .leading, spacing: 20) {
+                HStack {
+                    Button(sent ? "Done" : "Cancel") { dismiss() }
+                        .foregroundColor(sent ? FavoriumTheme.accent : FavoriumTheme.ivoryDim)
+                    Spacer()
+                }
+                .padding(.top, 16)
+
+                Text("Forgot your password?")
+                    .font(.system(size: 22, weight: .bold, design: .serif))
+                    .foregroundColor(FavoriumTheme.ivory)
+
+                if sent {
+                    Label {
+                        Text("If that address has a Favorium account, a reset link is on its way. Open it, set a new password in your browser, then come back and sign in. If it doesn\u{2019}t arrive in a few minutes, check your spam folder.")
+                            .fixedSize(horizontal: false, vertical: true)
+                    } icon: {
+                        Image(systemName: "envelope.badge")
+                            .foregroundColor(FavoriumTheme.accent)
+                    }
+                    .font(FavoriumTheme.bodyFont)
+                    .foregroundColor(FavoriumTheme.ivory)
+                } else {
+                    Text("We\u{2019}ll email you a link to set a new password.")
+                        .font(FavoriumTheme.captionFont)
+                        .foregroundColor(FavoriumTheme.ivoryDim)
+
+                    DecoTextField(title: "Email", systemImage: "envelope", text: $email, isFocused: focused)
+                        .textContentType(.emailAddress)
+                        .keyboardType(.emailAddress)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .focused($focused)
+                        .submitLabel(.send)
+                        .onSubmit(send)
+
+                    if let error {
+                        Text(error)
+                            .font(FavoriumTheme.captionFont)
+                            .foregroundColor(FavoriumTheme.amber)
+                    }
+
+                    Button(action: send) {
+                        HStack {
+                            if isSending { ProgressView().tint(FavoriumTheme.onGold) }
+                            Text("Send reset link").fontWeight(.semibold)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .metallicGoldCapsule()
+                        .opacity(canSend ? 1 : 0.4)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!canSend)
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, 24)
+        }
+        .onAppear {
+            email = initialEmail
+            focused = true
+        }
+    }
+
+    private func send() {
+        guard canSend else { return }
+        isSending = true
+        error = nil
+        Task {
+            do {
+                try await SupabaseService.shared.sendPasswordReset(email: trimmed)
+                withAnimation(.easeInOut(duration: 0.25)) { sent = true }
+            } catch {
+                // Rate limits or no connection; never "no such account" (the server doesn't say)
+                self.error = SupabaseService.errorMessage(error)
+            }
+            isSending = false
+        }
     }
 }
 

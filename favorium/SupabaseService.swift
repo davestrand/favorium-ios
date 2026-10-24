@@ -34,6 +34,27 @@ final class SupabaseService {
         // Must include display_name in metadata so the trigger can create profile + mint two Favors
         _ = try await client.auth.signUp(email: email, password: password, data: ["display_name": .string(displayName)])
     }
+    /// Emails a link to favorium.app/reset, where the new password is set in the browser.
+    /// Succeeds whether or not the address has an account, so nothing can be enumerated.
+    func sendPasswordReset(email: String) async throws {
+        try await client.auth.resetPasswordForEmail(email, redirectTo: FavoriumWeb.reset)
+    }
+
+    struct DeleteAccountResult: Decodable, Sendable {
+        /// "deleted" or "already_deleted" — both are success
+        let status: String?
+        let cancelled_favors: Int?
+    }
+
+    /// Deletes the signed-in account (self-scoped on the server; no id is passed).
+    /// The login and identity go immediately; shared gems and favor history stay.
+    @discardableResult
+    func deleteAccount() async throws -> DeleteAccountResult {
+        let response = try await client.rpc("delete_account").execute()
+        return (try? JSONDecoder().decode(DeleteAccountResult.self, from: response.data))
+            ?? DeleteAccountResult(status: nil, cancelled_favors: nil)
+    }
+
     func signIn(email: String, password: String) async throws {
         _ = try await client.auth.signIn(email: email, password: password)
     }
@@ -563,6 +584,8 @@ final class SupabaseService {
         var people_helped: Int? = nil
         /// When the current level was reached (null at level 0)
         var helper_level_at: String? = nil
+        /// Set once the account was deleted (the row stays so shared journeys still read)
+        var deleted_at: String? = nil
         
         var displayName: String {
             display_name ?? "Unknown User"
@@ -698,7 +721,7 @@ final class SupabaseService {
         var expiresAt: Date? { Self.parseTimestamp(expires_at) }
 
         /// Postgres timestamps arrive with or without fractional seconds.
-        static func parseTimestamp(_ raw: String) -> Date? {
+        nonisolated static func parseTimestamp(_ raw: String) -> Date? {
             let fractional = ISO8601DateFormatter()
             fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
             return fractional.date(from: raw) ?? ISO8601DateFormatter().date(from: raw)
@@ -819,7 +842,7 @@ final class SupabaseService {
     func getUserProfile(userId: UUID) async throws -> UserProfile {
         let response = try await client
             .from("profiles")
-            .select("id,display_name,created_at,avatar_url,helper_level,people_helped,helper_level_at")
+            .select("id,display_name,created_at,avatar_url,helper_level,people_helped,helper_level_at,deleted_at")
             .eq("id", value: userId.uuidString)
             .single()
             .execute()

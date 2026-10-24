@@ -40,6 +40,11 @@ struct AccountPauseNotice: View {
                         .font(FavoriumTheme.captionFont)
                         .foregroundColor(FavoriumTheme.ivoryDim)
                         .fixedSize(horizontal: false, vertical: true)
+                    Link(destination: FavoriumWeb.supportMail(subject: "Favorium iOS \u{2014} my account is paused")) {
+                        Label("Write to us", systemImage: "envelope")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(FavoriumTheme.accent)
+                    }
                 }
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)

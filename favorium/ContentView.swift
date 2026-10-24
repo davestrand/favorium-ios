@@ -89,6 +89,10 @@ struct ContentView: View {
                 Task { await notifications.appBecameActive() }
             }
         }
+        // A deleted account signs out instead of showing a half-empty profile
+        .onChange(of: appVM.accountWasDeleted) { _, deleted in
+            if deleted { Task { await appVM.signOut(authVM: authVM) } }
+        }
         .onChange(of: authVM.isAuthenticated) { _, newValue in
             if newValue {
                 Task { await appVM.bootstrap() }

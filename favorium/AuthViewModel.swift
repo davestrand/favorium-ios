@@ -55,11 +55,9 @@ final class AuthViewModel {
         infoMessage = nil
         isLoading = true
         defer { isLoading = false }
-        do {
-            try await SupabaseService.shared.signOut()
-            isAuthenticated = false
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+        // Local state always clears: after an account is deleted the server session is
+        // already gone, and a failed network sign-out mustn't leave the app half signed in
+        try? await SupabaseService.shared.signOut()
+        isAuthenticated = false
     }
 }

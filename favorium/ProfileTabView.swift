@@ -46,6 +46,9 @@ struct ProfileTabView: View {
     @Environment(AuthViewModel.self) private var authVM
 
     @State private var showSignOutConfirm = false
+    @State private var showDeleteConfirm = false
+    @State private var isDeleting = false
+    @State private var deleteError: String?
     @State private var stats = ProfileStatsModel()
     @State private var push = PushManager.shared
     // Profile photo
@@ -92,6 +95,11 @@ struct ProfileTabView: View {
                         // ── Sign out ──────────────────────────────────
                         signOutButton
                             .padding(.horizontal, 16)
+                            .padding(.bottom, 20)
+
+                        // ── Delete account (App Store 5.1.1(v)) ──────
+                        deleteAccountButton
+                            .padding(.horizontal, 16)
                             .padding(.bottom, 40)
                     }
                 }
@@ -118,6 +126,34 @@ struct ProfileTabView: View {
                 }
                 Button("Cancel", role: .cancel) { }
             }
+            .confirmationDialog(
+                "Delete your account?",
+                isPresented: $showDeleteConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Delete Account", role: .destructive) { deleteAccount() }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("This happens right away. You\u{2019}ll be signed out and can\u{2019}t sign back in, your name and photo are removed, and favors that haven\u{2019}t started yet are cancelled. Gems you\u{2019}ve given and the favor history you share with others stay with them, shown as \u{201C}Deleted member\u{201D}. This can\u{2019}t be undone.")
+            }
+            .alert("Couldn\u{2019}t delete your account",
+                   isPresented: Binding(get: { deleteError != nil }, set: { if !$0 { deleteError = nil } })) {
+                Button("OK") { }
+            } message: {
+                Text(deleteError ?? "")
+            }
+        }
+    }
+
+    private func deleteAccount() {
+        isDeleting = true
+        Task {
+            do {
+                try await appVM.deleteAccount(authVM: authVM)
+            } catch {
+                deleteError = SupabaseService.errorMessage(error)
+            }
+            isDeleting = false
         }
     }
 
@@ -297,6 +333,8 @@ struct ProfileTabView: View {
         VStack(spacing: 1) {
             notificationsRow
             settingsRow(icon: "questionmark.circle", label: "Help & Feedback", url: FavoriumWeb.help)
+            settingsRow(icon: "envelope", label: "Contact support",
+                        url: FavoriumWeb.supportMail(subject: "Favorium iOS \u{2014} account help"))
             settingsRow(icon: "info.circle", label: "About Favorium", url: FavoriumWeb.about)
             settingsRow(icon: "lock", label: "Privacy", url: FavoriumWeb.privacy)
             settingsRow(icon: "doc.text", label: "Terms", url: FavoriumWeb.terms)
@@ -385,6 +423,22 @@ struct ProfileTabView: View {
         .buttonStyle(.plain)
     }
 
+    // MARK: - Delete account
+
+    private var deleteAccountButton: some View {
+        Button { showDeleteConfirm = true } label: {
+            HStack(spacing: 8) {
+                if isDeleting { ProgressView().tint(FavoriumTheme.ivoryDim) }
+                Text("Delete Account")
+                    .font(.system(size: 14, weight: .medium))
+            }
+            .foregroundColor(FavoriumTheme.ivoryDim)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+        }
+        .disabled(isDeleting)
+    }
+
     // MARK: - Sign Out
 
     private var signOutButton: some View {
@@ -455,6 +509,24 @@ enum FavoriumWeb {
     static let help    = page("help")
     static let privacy = page("privacy")
     static let terms   = page("terms")
+    /// Where the reset email's link lands; the web page sets the new password
+    static let reset   = page("reset")
+
+    /// A person reads this mailbox
+    static let supportEmail = "support@favorium.app"
+
+    /// A pre-addressed message with a subject, so mail never arrives as an anonymous "Hi".
+    /// The person's own email is never pre-filled.
+    static func supportMail(subject: String) -> URL {
+        var comps = URLComponents()
+        comps.scheme = "mailto"
+        comps.path = supportEmail
+        comps.queryItems = [
+            URLQueryItem(name: "subject", value: subject),
+            URLQueryItem(name: "body", value: "\n\n---\nSent from the Favorium iOS app")
+        ]
+        return comps.url!
+    }
 
     private static func page(_ path: String) -> URL {
         URL(string: "\(origin)/\(path)")!
