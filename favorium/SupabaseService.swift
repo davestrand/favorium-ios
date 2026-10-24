@@ -30,9 +30,12 @@ final class SupabaseService {
         let signUpDisplayName: String?
     }
 
-    func signUp(email: String, password: String, displayName: String) async throws {
+    /// Returns true when the account is signed in straight away (email confirmation is off),
+    /// false if the server is waiting for the address to be confirmed first.
+    func signUp(email: String, password: String, displayName: String) async throws -> Bool {
         // Must include display_name in metadata so the trigger can create profile + mint two Favors
-        _ = try await client.auth.signUp(email: email, password: password, data: ["display_name": .string(displayName)])
+        let response = try await client.auth.signUp(email: email, password: password, data: ["display_name": .string(displayName)])
+        return response.session != nil
     }
     /// Emails a link to favorium.app/reset, where the new password is set in the browser.
     /// Succeeds whether or not the address has an account, so nothing can be enumerated.

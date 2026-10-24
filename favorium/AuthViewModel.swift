@@ -39,10 +39,15 @@ final class AuthViewModel {
                 guard !displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                     throw NSError(domain: "Auth", code: 0, userInfo: [NSLocalizedDescriptionKey: "Display name is required."])
                 }
-                try await SupabaseService.shared.signUp(email: email, password: password, displayName: displayName)
-                // If email confirmation is enabled, no session is returned. Inform the user.
-                infoMessage = "Check your inbox to confirm your email, then sign in."
-                mode = .signIn
+                let signedIn = try await SupabaseService.shared.signUp(email: email, password: password, displayName: displayName)
+                if signedIn {
+                    // Email confirmation is off: the new account goes straight in
+                    isAuthenticated = true
+                } else {
+                    // Only if confirmation is switched on later: no session until the address is confirmed
+                    infoMessage = "Check your inbox to confirm your email, then sign in."
+                    mode = .signIn
+                }
             }
         } catch {
             errorMessage = error.localizedDescription
