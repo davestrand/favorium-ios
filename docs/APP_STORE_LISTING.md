@@ -11,7 +11,7 @@ Do a favor, receive a gem. Every gem carries the journey of the kindness that mo
 ## Keywords (96/100)
 favors,kindness,gems,friends,neighbors,help,gratitude,gift,community,thank you,good deeds,circle
 
-## Description (1684/4000)
+## Description (2030/4000)
 Favorium turns everyday kindness into something you can hold.
 
 When you do a favor for someone in your circle, they thank you with a gem. Not points, not likes: a one-of-a-kind gem that leaves their collection and joins yours. Every gem remembers where it has been, so its journey grows each time it changes hands.
@@ -23,6 +23,9 @@ HOW IT WORKS
 
 EVERY GEM IS ONE OF A KIND
 Each gem is born with its own shape, colors and character. As it travels from person to person it gains rank, and its journey shows everyone who has held it.
+
+WATCH FAVORS FROM AFAR
+The gems you start with are your originals, and they stay connected to you wherever they go. Long after one leaves your hands, you can follow it as it's passed from friend to friend of friend, each step a favor done for someone, often between people you'll never meet. Your kindness keeps traveling, and you get to watch.
 
 STEP INSIDE
 Press and hold a gem to dive into it: a living kaleidoscope drawn from that gem's own light. Tilt your phone to steer it.
