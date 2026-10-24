@@ -25,7 +25,7 @@ EVERY GEM IS ONE OF A KIND
 Each gem is born with its own shape, colors and character. As it travels from person to person it gains rank, and its journey shows everyone who has held it.
 
 WATCH FAVORS FROM AFAR
-The gems you start with are your originals, and they stay connected to you wherever they go. Long after one leaves your hands, you can follow it as it's passed from friend to friend of friend, each step a favor done for someone, often between people you'll never meet. Your kindness keeps traveling, and you get to watch.
+The gems you start with are your originals, and they stay connected to you wherever they go. Long after one leaves your hands, you can follow it as it's passed from friend to friend of a friend, each step a favor done for someone, often between people you'll never meet. Your kindness keeps traveling, and you get to watch.
 
 STEP INSIDE
 Press and hold a gem to dive into it: a living kaleidoscope drawn from that gem's own light. Tilt your phone to steer it.
