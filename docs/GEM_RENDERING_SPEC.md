@@ -74,21 +74,22 @@ Whole gem motion, the "pendulum tilt", which several traits key off:
 ======================================================================
 
 RAINBOW: "A full spectrum of color drifts through its heart."
-  - A conic (angular) gradient around the centre, 12 evenly spaced stops at full saturation and brightness:
-    hue_i = (phase + i/12) mod 1
-  - phase goes 0 → 1 linearly every 8s, forever (the hues drift).
-  - The wheel also ROTATES in step with the pendulum: -15° → +20°, same 4.5s ease-in-out, alternating.
+  - A conic (angular) gradient around the centre: 13 stops at full saturation and brightness,
+    hue_i = (i mod 12) / 12 at location i/12. The last stop repeats red, so there's no seam.
+  - The wheel turns CLOCKWISE continuously: one full revolution every 12s, linear, forever.
+    No rocking and no separate hue drift. (Updated 2026-10-24 to match the web's full spin, which the user liked.)
+  - Draw it oversized (1.5·S) so its corners never show while it turns.
   - Opacity 50%, blend mode "color" (CSS mix-blend-mode: color), so it recolours the gem but keeps its shading.
   - Masked to the GEM image only, never the frame.
   CSS sketch:
     .rainbow {
-      background: conic-gradient(<12 hue stops>);
+      background: conic-gradient(<13 hue stops>);
       mix-blend-mode: color;
       opacity: .5;
       mask-image: url(gem.png);
-      animation: spin 4.5s ease-in-out infinite alternate;
+      animation: spin 12s linear infinite;
     }
-  Animate the hue drift with a custom property, or by rotating the conic gradient's "from" angle.
+    @keyframes spin { to { transform: rotate(360deg) } }
 
 IRIDESCENT: "Its setting shimmers like a butterfly's wing, shifting with every tilt." (tilt-driven)
   - Applies to the FRAME only.

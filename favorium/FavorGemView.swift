@@ -569,8 +569,7 @@ struct FavorGemView: View {
     
     // MARK: - Gem Trait Effects
 
-    @State private var rainbowPhase: Double = 0      // Rainbow: slow background drift
-    @State private var rainbowSpin: Double = -15     // Rainbow: tilt-driven rotation
+    @State private var rainbowSpin: Double = 0       // Rainbow: continuous clockwise turn
     @State private var iridescentHueShift: Double = 0.0 // Iridescent: slow hue drift between swings
     // Starlight: no independent animation state needed —
     // brightness is derived from tilt angle passing through each star's trigger window.
@@ -690,24 +689,21 @@ struct FavorGemView: View {
         .opacity(brightness)
     }
 
-    /// Rainbow — a full-spectrum colour wheel that physically spins in sync
-    /// with the pendulum tilt. `rainbowSpin` is animated with the same
-    /// easeInOut curve and duration as `tilt`, so the wheel rocks in lockstep
-    /// with the gem. A slow `rainbowPhase` drift offsets the hue stops
-    /// continuously so it never looks static.
+    /// Rainbow — a full-spectrum colour wheel that keeps slowly turning clockwise,
+    /// one revolution every 12 s, while the gem rocks on its pendulum.
     private var rainbowTraitView: some View {
-        let stops: [Gradient.Stop] = (0..<12).map { i in
-            let hue = (rainbowPhase + Double(i) / 12.0)
-                .truncatingRemainder(dividingBy: 1.0)
-            return .init(
-                color: Color(hue: hue, saturation: 1.0, brightness: 1.0),
+        // The last stop repeats the first hue so the wheel has no seam
+        let stops: [Gradient.Stop] = (0...12).map { i in
+            .init(
+                color: Color(hue: Double(i % 12) / 12.0, saturation: 1.0, brightness: 1.0),
                 location: Double(i) / 12.0
             )
         }
         return AngularGradient(stops: stops, center: .center)
-            .frame(width: size, height: size)
-            // rainbowSpin tracks the pendulum — same animation, 3× the angle
+            // Oversized so its corners never show inside the gem while it turns
+            .frame(width: size * 1.5, height: size * 1.5)
             .rotationEffect(.degrees(rainbowSpin))
+            .frame(width: size, height: size)
             .opacity(0.50)
             .blendMode(.color)
             .mask(
@@ -716,13 +712,9 @@ struct FavorGemView: View {
                     .frame(width: size, height: size)
             )
             .onAppear {
-                // Mirror the pendulum: same easing + duration as tilt, 1× range
-                withAnimation(.easeInOut(duration: 4.5).repeatForever(autoreverses: true)) {
-                    rainbowSpin = 20    // swings -15…+20, i.e. 35° total — same arc as the gem tilt
-                }
-                // Slow hue drift — one full revolution every 8 s
-                withAnimation(.linear(duration: 8.0).repeatForever(autoreverses: false)) {
-                    rainbowPhase = 1.0
+                // Positive degrees turn clockwise
+                withAnimation(.linear(duration: 12.0).repeatForever(autoreverses: false)) {
+                    rainbowSpin = 360
                 }
             }
     }
