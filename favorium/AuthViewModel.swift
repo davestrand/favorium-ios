@@ -30,6 +30,9 @@ final class AuthViewModel {
         infoMessage = nil
         isLoading = true
         defer { isLoading = false }
+        // Pasted credentials often carry a stray space or newline, and Supabase rejects
+        // the email outright if it isn't trimmed. Passwords are sent exactly as typed.
+        email = email.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
             switch mode {
             case .signIn:
