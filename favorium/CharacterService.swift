@@ -147,12 +147,19 @@ struct MyCharacter: Decodable, Sendable {
     var shown: [ShownUnlock] = []
     /// The Monday and visitor push opt-in (v1.2)
     var questPush: Bool?
+    /// The hour the Monday push arrives: the member's own (7–21) or the shared default
+    var questPushHour: Int?
+    var questPushHourIsCustom: Bool?
+    var questPushDefaultHour: Int?
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: AnyKey.self)
         character = c.first(PlayerCharacter.self, "character")
         shown = c.first([ShownUnlock].self, "shown") ?? []
         questPush = c.first(Bool.self, "quest_push")
+        questPushHour = c.first(Int.self, "quest_push_hour")
+        questPushHourIsCustom = c.first(Bool.self, "quest_push_hour_is_custom")
+        questPushDefaultHour = c.first(Int.self, "quest_push_default_hour")
     }
 }
 
@@ -437,6 +444,18 @@ extension SupabaseService {
             .rpc("quest_result_for_favor", params: Params(p_favor_id: favorId.uuidString))
             .execute()
         return try? JSONDecoder().decode(QuestResult.self, from: response.data)
+    }
+
+    /// The member's own hour for the Monday push, 7–21; nil goes back to the default
+    func setQuestPushHour(_ hour: Int?) async throws {
+        struct Params: Encodable {
+            let p_hour: Int?
+            func encode(to encoder: Encoder) throws {
+                var c = encoder.container(keyedBy: AnyKey.self)
+                try c.encode(p_hour, forKey: AnyKey("p_hour"))   // null is sent, to clear
+            }
+        }
+        _ = try await client.rpc("set_quest_push_hour", params: Params(p_hour: hour)).execute()
     }
 
     // Inventory and actions

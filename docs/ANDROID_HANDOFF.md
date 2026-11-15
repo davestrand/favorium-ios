@@ -369,6 +369,9 @@ Nothing else. No email, no settings rows, no sign out on this page.
 - **Notifications:** the system notification row (as before), and, only for members with
   a character, a **"New quests on Mondays"** toggle (`set_quest_push`, read from
   `my_character().quest_push`). It is the same setting as the toggle on the Quest Board.
+  While it's on, an **"Arrives at"** picker: "Default (8 AM)" (sends null) then 7 AM–9 PM
+  (`set_quest_push_hour`, 7–21; read `quest_push_hour`, `quest_push_hour_is_custom`,
+  `quest_push_default_hour` from `my_character()`). Never offer hours outside 7–21.
 - **About:** Help & Feedback, Contact support, About Favorium, Privacy, Terms.
 - **Sign Out** and **Delete Account**, with the same confirmations as §10. Delete stays
   reachable (store rules), just one tap deeper.

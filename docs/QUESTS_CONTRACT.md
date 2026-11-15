@@ -390,3 +390,18 @@ Still open, and neither bites until `max_characters` rises above 1:
 - **Dropping destroys it everywhere.** `drop_unlock` stamps `dropped_at` and deletes the
   unlock from every character's slots. Right for "destroyed" — but it means dropping can
   undress a character you are not currently looking at.
+
+## Addendum (relayed 2026-11-15, after v1.2): the Monday push hour
+
+The web repo's copy has the full text; this is the summary iOS built against.
+
+- `set_quest_push_hour(p_hour)`: the member's own hour, **7–21**. `null` clears it and
+  returns them to the shared default. Out of range raises `Pick an hour between 7 and 21.`
+- `my_quest_push_hour()` → `{quest_push_hour, quest_push_hour_is_custom,
+  quest_push_default_hour}`. The same three fields come back from `my_character()`
+  beside `quest_push`.
+- `quest_config.board_push_local_time` is now only the shared fallback (08:00). The
+  member's hour wins; both are clamped to 07:00–22:00, so no quest push arrives overnight.
+- `not_taken` stays internal: quests nobody accepted just leave the board. Gestures on a
+  thank-you gem: **decided against** by the product owner.
+

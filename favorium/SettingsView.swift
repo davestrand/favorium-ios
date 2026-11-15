@@ -176,6 +176,9 @@ struct SettingsView: View {
                 .tint(FavoriumTheme.accent)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
+                if store.mine?.questPush == true {
+                    hourPicker
+                }
                 if let questPushError {
                     Text(questPushError)
                         .font(FavoriumTheme.captionFont)
@@ -230,6 +233,54 @@ struct SettingsView: View {
             if scenePhase == .active { await push.refreshAuthorizationStatus() }
         }
         .accessibilityLabel("Notifications, \(notificationsEnabled ? "on" : "off")")
+    }
+
+    /// Which morning-ish hour the Monday push arrives. The server only allows 7–21, so
+    /// nothing earlier or later is offered; "Default" sends null.
+    private var hourPicker: some View {
+        let defaultHour = store.mine?.questPushDefaultHour ?? 8
+        let isCustom = store.mine?.questPushHourIsCustom ?? false
+        let selection = Binding<Int?>(
+            get: { isCustom ? store.mine?.questPushHour : nil },
+            set: { setQuestPushHour($0) }
+        )
+        return HStack {
+            Text("Arrives at")
+                .font(FavoriumTheme.bodyFont)
+                .foregroundColor(FavoriumTheme.ivory)
+            Spacer()
+            Picker("Arrives at", selection: selection) {
+                Text("Default (\(hourLabel(defaultHour)))").tag(Int?.none)
+                ForEach(7...21, id: \.self) { hour in
+                    Text(hourLabel(hour)).tag(Optional(hour))
+                }
+            }
+            .tint(FavoriumTheme.accent)
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 12)
+    }
+
+    /// "8 AM" / "20:00", following the person's clock setting
+    private func hourLabel(_ hour: Int) -> String {
+        let date = Calendar.current.date(bySettingHour: hour, minute: 0, second: 0, of: .now) ?? .now
+        return date.formatted(date: .omitted, time: .shortened)
+    }
+
+    private func setQuestPushHour(_ hour: Int?) {
+        let previous = (store.mine?.questPushHour, store.mine?.questPushHourIsCustom)
+        store.mine?.questPushHour = hour ?? store.mine?.questPushDefaultHour
+        store.mine?.questPushHourIsCustom = hour != nil
+        questPushError = nil
+        Task {
+            do {
+                try await SupabaseService.shared.setQuestPushHour(hour)
+            } catch {
+                store.mine?.questPushHour = previous.0
+                store.mine?.questPushHourIsCustom = previous.1
+                questPushError = SupabaseService.errorMessage(error)
+            }
+        }
     }
 
     private func setQuestPush(_ enabled: Bool) {
