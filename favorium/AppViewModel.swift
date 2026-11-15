@@ -76,6 +76,9 @@ final class AppViewModel {
             .first { !$0.isEmpty } ?? ""
         if profile?.deleted_at != nil { accountWasDeleted = true; return }
         if let profile { applyTitle(from: profile) }
+
+        // The Quest Board refreshes at local Monday midnight, so keep the server's zone current
+        Task { try? await SupabaseService.shared.setTimeZone(TimeZone.current.identifier) }
     }
 
     /// Re-reads the title after favors change (a gem received can raise it).

@@ -17,7 +17,8 @@ final class SupabaseService {
     private let supabaseAnonKey = "sb_publishable_SPurNrFoPcJI2_Z_FM0haw_ixl5hEyM"
 
     // MARK: - Client
-    private lazy var client: SupabaseClient = {
+    /// Readable by the extensions in other files (e.g. CharacterService.swift)
+    private(set) lazy var client: SupabaseClient = {
         SupabaseClient(supabaseURL: supabaseURL, supabaseKey: supabaseAnonKey)
     }()
 

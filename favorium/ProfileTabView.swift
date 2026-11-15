@@ -50,6 +50,7 @@ struct ProfileTabView: View {
     @State private var isDeleting = false
     @State private var deleteError: String?
     @State private var stats = ProfileStatsModel()
+    @State private var characterStore = CharacterStore()
     @State private var push = PushManager.shared
     // Profile photo
     @State private var showPhotoPicker = false
@@ -87,6 +88,11 @@ struct ProfileTabView: View {
                             .padding(.horizontal, 16)
                             .padding(.bottom, 28)
 
+                        // ── Character & quests (QUESTS_CONTRACT) ──────
+                        CharacterSection(store: characterStore)
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 28)
+
                         // ── Settings rows ─────────────────────────────
                         settingsSection
                             .padding(.horizontal, 16)
@@ -108,6 +114,7 @@ struct ProfileTabView: View {
                 .refreshable {
                     await stats.load(userId: appVM.userId)
                     await appVM.refreshTitle()
+                    await characterStore.load(userId: appVM.userId)
                 }
             }
             .navigationBarHidden(true)
@@ -115,6 +122,7 @@ struct ProfileTabView: View {
             .task {
                 await stats.load(userId: appVM.userId)
                 await appVM.refreshTitle()
+                await characterStore.load(userId: appVM.userId)
             }
             .confirmationDialog(
                 "Sign out of Favorium?",

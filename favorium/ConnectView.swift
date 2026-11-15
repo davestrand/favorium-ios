@@ -171,6 +171,8 @@ struct ConnectView: View {
     @State private var vm: ConnectViewModel
     @State private var reportingPerson: SafetyPerson?
     @State private var blockingPerson: SafetyPerson?
+    /// Whose character description is open
+    @State private var viewingPerson: SafetyPerson?
     @State private var showBlocked = false
     @Environment(\.dismiss) private var dismiss
     @FocusState private var codeFieldFocused: Bool
@@ -224,6 +226,9 @@ struct ConnectView: View {
             async let restore: Void = vm.restoreInvite(userId: userId)
             async let circle: Void = vm.loadCircle(userId: userId)
             _ = await (restore, circle)
+        }
+        .sheet(item: $viewingPerson) { person in
+            PersonCharacterView(person: person)
         }
         .personSafetyActions(reporting: $reportingPerson, blocking: $blockingPerson) {
             if let userId { Task { await vm.loadCircle(userId: userId) } }
@@ -467,6 +472,9 @@ struct ConnectView: View {
                             }
                             Spacer()
                             Menu {
+                                Button("View character", systemImage: "person.text.rectangle") {
+                                    viewingPerson = SafetyPerson(id: member.id, name: member.displayName)
+                                }
                                 Button("Report \(member.displayName)", systemImage: "flag") {
                                     reportingPerson = SafetyPerson(id: member.id, name: member.displayName)
                                 }
