@@ -402,6 +402,7 @@ struct PersonCharacterView: View {
 
     @State private var lines: [String] = []
     @State private var myActions: [InventoryItem] = []
+    @State private var catalogLabels: [String: String] = [:]
     @State private var error: String?
     @State private var sentLine: String?
     @State private var isSending = false
@@ -454,10 +455,10 @@ struct PersonCharacterView: View {
         }
     }
 
-    /// "bows {pos} head" → "Bow your head" would need grammar the server owns, so the
-    /// menu shows the action as written for "them": "bows their head".
+    /// The sender's wording from the server ("Bow your head"); older rows fall back to
+    /// the receiver's text with "their" ("bows their head").
     private func actionLabel(_ action: InventoryItem) -> String {
-        action.text.replacingOccurrences(of: "{pos}", with: "their")
+        action.label ?? catalogLabels[action.key] ?? action.text.replacingOccurrences(of: "{pos}", with: "their")
     }
 
     @MainActor
@@ -469,6 +470,10 @@ struct PersonCharacterView: View {
         }
         let inventory = (try? await SupabaseService.shared.myInventory()) ?? []
         myActions = inventory.filter { $0.kind == "action" }
+        if !myActions.isEmpty, let catalog = try? await SupabaseService.shared.catalog() {
+            catalogLabels = Dictionary(catalog.compactMap { e in e.label.map { (e.key, $0) } },
+                                       uniquingKeysWith: { first, _ in first })
+        }
     }
 
     private func send(_ action: InventoryItem) {

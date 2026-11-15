@@ -46,7 +46,8 @@ struct QuestBoardView: View {
     @State private var busyQuest: UUID?
     @State private var abandoning: Quest?
     @State private var error: String?
-    @AppStorage("questPushEnabled") private var questPush = false
+    /// Seeded from `my_character().quest_push`; the server is the authority
+    @State private var questPush = false
 
     var body: some View {
         ZStack {
@@ -94,7 +95,10 @@ struct QuestBoardView: View {
         }
         .navigationTitle("Quest Board")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await store.load(userId: appVM.userId) }
+        .task {
+            await store.load(userId: appVM.userId)
+            questPush = store.mine?.questPush ?? false
+        }
         .confirmationDialog("Abandon this quest?", isPresented: Binding(
             get: { abandoning != nil }, set: { if !$0 { abandoning = nil } }
         ), titleVisibility: .visible, presenting: abandoning) { quest in
@@ -127,7 +131,7 @@ struct QuestBoardView: View {
         }
     }
 
-    /// Accepted quests the board no longer lists (drawn in an earlier week)
+    /// Accepted quests from earlier weeks: `my_board()` lists this week only
     private var olderAccepted: [Quest] {
         let onBoard = Set((store.board?.quests ?? []).map(\.id) + (store.board?.visit?.quests ?? []).map(\.id))
         return store.history.filter { $0.isAccepted && !onBoard.contains($0.id) }
@@ -263,7 +267,6 @@ struct QuestBoardView: View {
         }
     }
 
-    /// The server can't report this setting back yet, so the device remembers what was chosen.
     private func setPush(_ enabled: Bool) {
         let previous = questPush
         questPush = enabled

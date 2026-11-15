@@ -44,6 +44,8 @@ struct CatalogEntry: Decodable, Identifiable, Hashable, Sendable {
     var slot: String? = nil
     var rarity: String? = nil
     var directed: Bool? = nil
+    /// Gestures only: the sender's wording, e.g. "Bow your head" (`text` is the receiver's)
+    var label: String? = nil
     var sort: Int? = nil
     var active: Bool? = nil
 
@@ -143,11 +145,14 @@ struct ShownUnlock: Decodable, Sendable {
 struct MyCharacter: Decodable, Sendable {
     let character: PlayerCharacter?
     var shown: [ShownUnlock] = []
+    /// The Monday and visitor push opt-in (v1.2)
+    var questPush: Bool?
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: AnyKey.self)
         character = c.first(PlayerCharacter.self, "character")
         shown = c.first([ShownUnlock].self, "shown") ?? []
+        questPush = c.first(Bool.self, "quest_push")
     }
 }
 
@@ -211,6 +216,8 @@ struct InventoryItem: Decodable, Identifiable, Sendable {
     /// Which of your characters has this object on; nil = in the backpack. Traits and
     /// gestures are never "worn by" anyone in this sense.
     let wornByCharacterId: UUID?
+    /// Gestures: the sender's wording ("Bow your head"), when the server includes it
+    let label: String?
 
     /// Traits are things a character *is*: any number of characters may share one
     var isTrait: Bool { ["look_term", "rep_term", "hairstyle"].contains(kind) }
@@ -235,6 +242,7 @@ struct InventoryItem: Decodable, Identifiable, Sendable {
         earnedAt = c.first(String.self, "earned_at")
         shownIn = c.first(String.self, "shown_slot", "shown_in")
         wornByCharacterId = c.first(UUID.self, "worn_by_character_id")
+        label = c.first(String.self, "label")
     }
 }
 
@@ -375,13 +383,10 @@ extension SupabaseService {
         return try JSONDecoder().decode(QuestBoard.self, from: response.data)
     }
 
-    /// Accepted quests plus history. Accepts either a flat array or an object of arrays.
+    /// Accepted quests plus history (completed / expired / abandoned), as one array
     func myQuests() async throws -> [Quest] {
         let response = try await client.rpc("my_quests").execute()
-        let decoder = JSONDecoder()
-        if let list = try? decoder.decode([Quest].self, from: response.data) { return list }
-        let groups = try decoder.decode([String: [Quest]].self, from: response.data)
-        return groups.values.flatMap { $0 }
+        return try JSONDecoder().decode([Quest].self, from: response.data)
     }
 
     func acceptQuest(_ id: UUID) async throws {
