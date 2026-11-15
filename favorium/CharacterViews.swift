@@ -97,6 +97,18 @@ struct CharacterDescriptionText: View {
     }
 }
 
+/// "Quest · Carry something heavy", shown above a favor that carries a quest
+struct QuestTag: View {
+    let title: String
+
+    var body: some View {
+        Label("Quest \u{00B7} \(title)", systemImage: "scroll")
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundColor(FavoriumTheme.accent)
+            .lineLimit(1)
+    }
+}
+
 struct GoldButtonLabel: View {
     let title: String
     var busy = false

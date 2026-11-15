@@ -30,8 +30,22 @@ final class OfferHelpViewModel {
 
     var step: Step = .compose
 
+    /// Accepted quests not yet carried by a favor (QUESTS_CONTRACT §7.1)
+    var openQuests: [Quest] = []
+    /// When set, the favor carries this quest and its prompt replaces the message
+    var quest: Quest?
+
     var canSend: Bool {
-        recipient != nil && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        recipient != nil && (quest != nil || !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
+
+    /// Quests that can still be offered: accepted, not in a favor, not out of time
+    @MainActor
+    func loadQuests() async {
+        guard let quests = try? await SupabaseService.shared.myQuests() else { return }
+        openQuests = quests.filter { quest in
+            quest.isAccepted && quest.favor_id == nil && (quest.expiresAt.map { $0 > .now } ?? true)
+        }
     }
 
     /// True once we have people to pick from without typing
@@ -95,13 +109,17 @@ final class OfferHelpViewModel {
         guard let recipientId = recipient?.id else { return }
         step = .sending
         do {
-            _ = try await SupabaseService.shared.proposeFavor(
-                helpedUserId: recipientId,
-                description: message.trimmingCharacters(in: .whitespacesAndNewlines)
-            )
+            if let quest {
+                _ = try await SupabaseService.shared.proposeQuestFavor(helpedUserId: recipientId, userQuestId: quest.id)
+            } else {
+                _ = try await SupabaseService.shared.proposeFavor(
+                    helpedUserId: recipientId,
+                    description: message.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
+            }
             step = .done
         } catch {
-            step = .failed(error.localizedDescription)
+            step = .failed(SupabaseService.errorMessage(error))
         }
     }
 }
@@ -110,6 +128,8 @@ final class OfferHelpViewModel {
 
 struct OfferHelpView: View {
     let userId: UUID?
+    /// Pre-attached when opened from the Quest Board
+    var quest: Quest? = nil
     let onComplete: () -> Void
 
     @State private var vm = OfferHelpViewModel()
@@ -143,7 +163,12 @@ struct OfferHelpView: View {
                 failureView(msg)
             }
         }
-        .task { await vm.loadPeople(userId: userId) }
+        .task {
+            if let quest { vm.quest = quest }
+            async let people: () = vm.loadPeople(userId: userId)
+            async let quests: () = vm.loadQuests()
+            _ = await (people, quests)
+        }
     }
 
     // MARK: - Compose
@@ -179,7 +204,12 @@ struct OfferHelpView: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 recipientField
-                messageField
+                if vm.quest != nil || !vm.openQuests.isEmpty {
+                    questField
+                }
+                if vm.quest == nil {
+                    messageField
+                }
 
                 Button {
                     Task { await vm.send() }
@@ -344,6 +374,57 @@ struct OfferHelpView: View {
             vm.recipient = person
             vm.searchQuery = ""
             vm.searchResults = []
+        }
+    }
+
+    // MARK: - Quest
+
+    /// Carry an accepted quest: its prompt becomes the favor, word for word
+    private var questField: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Carry a quest?")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(FavoriumTheme.ivoryDim)
+
+            if let quest = vm.quest {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        QuestTag(title: quest.title)
+                        Spacer()
+                        Button { withAnimation { vm.quest = nil } } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(FavoriumTheme.ivoryDim)
+                        }
+                        .accessibilityLabel("Don\u{2019}t carry a quest")
+                    }
+                    Text(quest.prompt)
+                        .font(FavoriumTheme.bodyFont)
+                        .foregroundColor(FavoriumTheme.ivory)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("A quest\u{2019}s favor reads exactly as the quest does. When they thank you with a gem, you also earn \(quest.unlock.rewardPhrase).")
+                        .font(FavoriumTheme.captionFont)
+                        .foregroundColor(FavoriumTheme.ivoryDim)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(12)
+                .background(FavoriumTheme.surface)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(FavoriumTheme.accent.opacity(0.4), lineWidth: 1))
+            } else {
+                Menu {
+                    ForEach(vm.openQuests) { quest in
+                        Button(quest.title) { withAnimation { vm.quest = quest } }
+                    }
+                } label: {
+                    Label("Choose one of your quests", systemImage: "scroll")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(FavoriumTheme.accent)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(12)
+                        .background(FavoriumTheme.surface)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+            }
         }
     }
 

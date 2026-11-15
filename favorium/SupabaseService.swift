@@ -445,6 +445,9 @@ final class SupabaseService {
         /// Helper title levels, 0–5 (IOS_CONTRACT: helper titles)
         var helper_level: Int? = nil
         var helped_level: Int? = nil
+        /// Set when the favor carries a quest (QUESTS_CONTRACT §7.2); the description is then the quest's prompt
+        var user_quest_id: UUID? = nil
+        var quest_title: String? = nil
         
         var isProposed: Bool { status == "proposed" }
         var isAccepted: Bool { status == "accepted" }
@@ -458,7 +461,7 @@ final class SupabaseService {
     func myIncomingFavors(userId: UUID) async throws -> [Favor] {
         let response = try await client
             .from("favors")
-            .select("id,helper_id,helped_id,description,status,created_at,accepted_at,completed_at,transferred_at,coin_id,helper:profiles!favors_helper_id_fkey(display_name,avatar_url,helper_level),helped:profiles!favors_helped_id_fkey(display_name,avatar_url,helper_level)")
+            .select("id,helper_id,helped_id,description,status,created_at,accepted_at,completed_at,transferred_at,coin_id,user_quest_id,quest_title,helper:profiles!favors_helper_id_fkey(display_name,avatar_url,helper_level),helped:profiles!favors_helped_id_fkey(display_name,avatar_url,helper_level)")
             .eq("helped_id", value: userId.uuidString)
             .order("created_at", ascending: false)
             .execute()
@@ -472,7 +475,7 @@ final class SupabaseService {
     func myOutgoingFavors(userId: UUID) async throws -> [Favor] {
         let response = try await client
             .from("favors")
-            .select("id,helper_id,helped_id,description,status,created_at,accepted_at,completed_at,transferred_at,coin_id,helper:profiles!favors_helper_id_fkey(display_name,avatar_url,helper_level),helped:profiles!favors_helped_id_fkey(display_name,avatar_url,helper_level)")
+            .select("id,helper_id,helped_id,description,status,created_at,accepted_at,completed_at,transferred_at,coin_id,user_quest_id,quest_title,helper:profiles!favors_helper_id_fkey(display_name,avatar_url,helper_level),helped:profiles!favors_helped_id_fkey(display_name,avatar_url,helper_level)")
             .eq("helper_id", value: userId.uuidString)
             .order("created_at", ascending: false)
             .execute()
@@ -965,6 +968,8 @@ final class SupabaseService {
         let completed_at: String?
         let transferred_at: String?
         let coin_id: UUID?
+        var user_quest_id: UUID? = nil
+        var quest_title: String? = nil
         let helper: ProfileName?
         let helped: ProfileName?
         
@@ -991,7 +996,9 @@ final class SupabaseService {
                 helper_avatar_url: helper?.avatar_url,
                 helped_avatar_url: helped?.avatar_url,
                 helper_level: helper?.helper_level,
-                helped_level: helped?.helper_level
+                helped_level: helped?.helper_level,
+                user_quest_id: user_quest_id,
+                quest_title: quest_title
             )
         }
     }

@@ -311,6 +311,7 @@ struct SendGemView: View {
             Text("\(favor.helper_name ?? "Someone") helped you")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(FavoriumTheme.ivory)
+            if let quest = favor.quest_title { QuestTag(title: quest) }
             Text(favor.description)
                 .font(FavoriumTheme.captionFont)
                 .foregroundColor(FavoriumTheme.ivoryDim)
@@ -562,7 +563,8 @@ struct SendGemView: View {
 
     private var doneView: some View {
         FavorGivenView(
-            given: FavorGiven(gem: vm.gem, helperName: vm.favor?.helper_name ?? "them"),
+            given: FavorGiven(gem: vm.gem, helperName: vm.favor?.helper_name ?? "them",
+                              questLine: vm.favor?.quest_title.map { "This completed their quest \u{201C}\($0)\u{201D}." }),
             onDone: onComplete
         )
     }

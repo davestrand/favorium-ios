@@ -169,6 +169,7 @@ struct FavorDetailView: View {
                 .textCase(.uppercase)
                 .tracking(2)
                 .foregroundColor(FavoriumTheme.accent)
+            if let quest = favor.quest_title { QuestTag(title: quest) }
             Text(favor.description)
                 .font(FavoriumTheme.bodyFont)
                 .foregroundColor(FavoriumTheme.ivory)

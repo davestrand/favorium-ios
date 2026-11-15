@@ -21,6 +21,8 @@ struct FavorGiven: Identifiable {
     var favorDescription: String? = nil
     /// Other gems that arrived since the last celebration (received only)
     var alsoArrived = 0
+    /// "Quest complete — …" when the favor carried a quest
+    var questLine: String? = nil
 }
 
 struct FavorGivenView: View {
@@ -104,6 +106,14 @@ struct FavorGivenView: View {
                     Text(reason)
                         .font(.system(size: 15, design: .serif).italic())
                         .foregroundColor(FavoriumTheme.ivory.opacity(0.85))
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 4)
+                }
+                if let questLine = given.questLine {
+                    Label(questLine, systemImage: "scroll")
+                        .font(.system(size: 15, weight: .semibold, design: .serif))
+                        .foregroundColor(FavoriumTheme.accent)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 4)

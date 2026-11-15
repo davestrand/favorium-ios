@@ -228,6 +228,8 @@ final class FavorNotificationCenter {
         let icon = switch kind {
         case "transferred", "gift": "gift.fill"
         case "title":               "sparkles"
+        case "quest_board", "visitor_arrived", "visitor_leaving", "quest_complete": "scroll"
+        case "action":              "hand.wave"
         default:                    "hand.raised.fill"
         }
         let key = favorId.map { "\($0.lowercased())-\(kind ?? "")" }
@@ -279,12 +281,19 @@ final class FavorNotificationCenter {
         defaults.set(at, forKey: key)
 
         let gem = (try? await SupabaseService.shared.coins(ids: [coinId]))?.first.map(GiftableGem.init)
+        // A favor carrying a quest completes it as the gem moves (QUESTS_CONTRACT §7.3)
+        var questLine: String?
+        if newest.user_quest_id != nil,
+           let result = try? await SupabaseService.shared.questResultForFavor(newest.id), result.isCompleted {
+            questLine = "Quest complete \u{2014} you\u{2019}ve earned \(result.quest.unlock.rewardPhrase)."
+        }
         arrivalToCelebrate = FavorGiven(
             kind: .received,
             gem: gem,
             helperName: newest.helped_name ?? "Someone",
             favorDescription: newest.description,
-            alsoArrived: arrivals.count - 1
+            alsoArrived: arrivals.count - 1,
+            questLine: questLine
         )
     }
 

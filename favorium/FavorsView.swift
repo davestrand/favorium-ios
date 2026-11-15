@@ -367,6 +367,7 @@ struct FavorsView: View {
                             personLevel: favor.helper_level,
                             title: "\(favor.helper_name ?? "Someone") helped you",
                             description: favor.description,
+                            questTitle: favor.quest_title,
                             badge: ("Give a gem", FavoriumTheme.gold),
                             action: .init(label: "Give a gem", icon: "gift", isPrimary: true) {
                                 givingGemFor = favor
@@ -387,6 +388,7 @@ struct FavorsView: View {
                             personLevel: favor.helper_level,
                             title: "\(favor.helper_name ?? "Someone") is helping you",
                             description: favor.description,
+                            questTitle: favor.quest_title,
                             badge: ("In progress", FavoriumTheme.accent),
                             action: .init(label: "Mark complete", icon: "checkmark.circle", isPrimary: false) {
                                 act { await vm.complete(favor, userId: $0) }
@@ -407,6 +409,7 @@ struct FavorsView: View {
                             personLevel: favor.helped_level,
                             title: "You're helping \(favor.helped_name ?? "someone")",
                             description: favor.description,
+                            questTitle: favor.quest_title,
                             badge: helperWaitingBadge(favor),
                             action: nil,
                             // Cancellable until the helped person confirms it's done
@@ -608,6 +611,7 @@ private struct IncomingPendingCard: View {
                             FavorMoreMenuButton(menu: menu)
                         }
                     }
+                    if let quest = favor.quest_title { QuestTag(title: quest) }
                     Text(favor.description)
                         .font(FavoriumTheme.bodyFont)
                         .foregroundColor(FavoriumTheme.ivory.opacity(0.85))
@@ -676,6 +680,8 @@ private struct FavorStatusCard: View {
     var personLevel: Int? = nil
     let title: String
     let description: String
+    /// The quest this favor carries, if any
+    var questTitle: String? = nil
     struct Cancel {
         let label: String
         let perform: () -> Void
@@ -703,6 +709,7 @@ private struct FavorStatusCard: View {
                     Text(title)
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(FavoriumTheme.ivory)
+                    if let questTitle { QuestTag(title: questTitle) }
                     Text(description)
                         .font(FavoriumTheme.bodyFont)
                         .foregroundColor(FavoriumTheme.ivory.opacity(0.85))

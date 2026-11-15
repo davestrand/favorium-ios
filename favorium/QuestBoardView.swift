@@ -45,6 +45,8 @@ struct QuestBoardView: View {
     @State private var push = PushManager.shared
     @State private var busyQuest: UUID?
     @State private var abandoning: Quest?
+    /// The accepted quest being offered as a favor
+    @State private var offering: Quest?
     @State private var error: String?
     /// Seeded from `my_character().quest_push`; the server is the authority
     @State private var questPush = false
@@ -98,6 +100,10 @@ struct QuestBoardView: View {
         .task {
             await store.load(userId: appVM.userId)
             questPush = store.mine?.questPush ?? false
+        }
+        .sheet(item: $offering, onDismiss: { Task { await store.load(userId: appVM.userId) } }) { quest in
+            OfferHelpView(userId: appVM.userId, quest: quest, onComplete: {})
+                .environment(appVM)
         }
         .confirmationDialog("Abandon this quest?", isPresented: Binding(
             get: { abandoning != nil }, set: { if !$0 { abandoning = nil } }
@@ -208,6 +214,17 @@ struct QuestBoardView: View {
                             .font(.system(size: 13, weight: .medium))
                             .foregroundColor(FavoriumTheme.ivoryDim)
                     }
+                }
+                // A quest is done by doing it as a favor for someone in your circle
+                if quest.favor_id == nil {
+                    Button { offering = quest } label: {
+                        Label("Offer as a favor", systemImage: "hand.raised.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 9)
+                            .metallicGoldCapsule()
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }

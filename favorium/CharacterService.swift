@@ -263,6 +263,14 @@ struct ActionReceived: Decodable, Identifiable, Sendable {
     }
 }
 
+/// `quest_result_for_favor`: the quest a settled favor carried
+struct QuestResult: Decodable, Sendable {
+    let quest_title: String?
+    let quest: Quest
+
+    var isCompleted: Bool { quest.status == "completed" }
+}
+
 struct QuestSettings: Decodable, Sendable {
     var max_characters: Int = 1
     var board_size: Int = 5
@@ -409,6 +417,26 @@ extension SupabaseService {
     func setQuestPush(_ enabled: Bool) async throws {
         struct Params: Encodable { let p_enabled: Bool }
         _ = try await client.rpc("set_quest_push", params: Params(p_enabled: enabled)).execute()
+    }
+
+    /// Offers a favor that carries an accepted quest. The server writes the quest's
+    /// prompt as the description, so neither side can reword it (QUESTS_CONTRACT §7.1).
+    func proposeQuestFavor(helpedUserId: UUID, userQuestId: UUID) async throws -> UUID {
+        struct Params: Encodable { let p_helped_id: String; let p_user_quest_id: String }
+        let response = try await client
+            .rpc("propose_quest_favor", params: Params(p_helped_id: helpedUserId.uuidString,
+                                                       p_user_quest_id: userQuestId.uuidString))
+            .execute()
+        return try JSONDecoder().decode(UUID.self, from: response.data)
+    }
+
+    /// After a gem is given: the quest that favor completed, or nil if it carried none
+    func questResultForFavor(_ favorId: UUID) async throws -> QuestResult? {
+        struct Params: Encodable { let p_favor_id: String }
+        let response = try await client
+            .rpc("quest_result_for_favor", params: Params(p_favor_id: favorId.uuidString))
+            .execute()
+        return try? JSONDecoder().decode(QuestResult.self, from: response.data)
     }
 
     // Inventory and actions
