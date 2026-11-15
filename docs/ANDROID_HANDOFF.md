@@ -57,7 +57,11 @@ Root: `ContentView.swift`. AuthView until signed in, then three tabs: **Collecti
 | `SendGemView.swift` | Give a gem for a completed favor (pick the gem or the favor) |
 | `FavorGivenView.swift` | Celebrations: "Favor given" (giver) and "A gem arrived" (helper) |
 | `ConnectView.swift` | Pairing: show your code/QR, redeem someone else's code, your circle |
-| `ProfileTabView.swift` | Avatar, stats, notifications, Help/Contact/Privacy/Terms, sign out, delete account |
+| `ProfileTabView.swift` | The character page: portrait, character description, Quest Board / Wardrobe links, stats, and a gear for Settings (see §17) |
+| `SettingsView.swift` | Settings sheet from the gear: photo, email, notifications, Help/Contact/About/Privacy/Terms, sign out, delete account |
+| `CharacterViews.swift` | Character store, the Profile character card, the character creator, another member's character + Act menu |
+| `QuestBoardView.swift` | Quest Board, Wardrobe (backpack / wearing / traits / gestures), gestures received |
+| `CharacterService.swift` | Every quest and character backend call and model |
 | `HelperTitles.swift` | Titles, avatar frames, "title earned" celebration |
 | `EngraveGemView.swift` | Write a secret into a gem |
 | `RenameGemView.swift` | Rename a gem you created |
@@ -328,3 +332,72 @@ comes from a UUID-byte checksum over a 7-colour palette, identical on web and iO
 - Ask before backend changes, and route them through the web agent.
 - The user likes plain-language explanations, and copy that matches the app's actual
   behaviour exactly.
+
+---
+
+## 17. Quests, characters and the Profile layout (added after 1.0)
+
+Not in iOS 1.0; built on the `quests` branch in November 2026. Read these first:
+`QUESTS.md` (the design), `QUESTS_CONTRACT.md` (the backend, v1.2, authoritative) and the
+web agent's `APP_HANDOFF_2026-11-15_TRAITS.md` (traits vs objects, the backpack).
+Everything the description says is rendered by the server; never compose it in the app.
+
+### The Profile tab is a character page, settings are behind a gear
+
+The product owner asked for this: settings on the same page as the game "takes me out of
+the experience". Match this layout.
+
+**Profile tab**, top to bottom:
+1. Header ("Profile", the member's name) with a **gear button fixed in the top-right
+   corner** (it does not scroll). It opens Settings.
+2. Account pause notice, if any (§10).
+3. **Portrait:** the avatar (104 pt, with its title frame) and the title's meaning
+   ("One who stops to help a stranger on the road."). The name and title are shown under
+   the portrait **only when the member has no character**, because the description's
+   first line already says them ("You see Dave, Samaritan of Favorium.").
+   The portrait is not tappable; the photo is changed in Settings.
+4. **Character card:** with no character, "Create your character" and a Begin button.
+   With one, the description lines (serif, first line larger), then links to Quest Board
+   ("N new"), Wardrobe ("N earned") and Received (only if any), then "Change appearance".
+   No "Your character" heading.
+5. **Stats:** gems held, originals, favors.
+
+Nothing else. No email, no settings rows, no sign out on this page.
+
+**Settings** (a sheet with Done), in sections:
+- **Account:** avatar with Change photo / Remove, the name, the email.
+- **Notifications:** the system notification row (as before), and, only for members with
+  a character, a **"New quests on Mondays"** toggle (`set_quest_push`, read from
+  `my_character().quest_push`). It is the same setting as the toggle on the Quest Board.
+- **About:** Help & Feedback, Contact support, About Favorium, Privacy, Terms.
+- **Sign Out** and **Delete Account**, with the same confirmations as §10. Delete stays
+  reachable (store rules), just one tap deeper.
+
+The Profile page and Settings both pin their content to the screen width, so the page
+can't drift sideways.
+
+### Other quest screens
+
+- **Character creator** (sheet): pronouns, then **every race at once** with its flavor
+  text (from `catalog()`, never hard-coded), then optional appearance. Confirm before
+  creating: "Your race is permanent". Editing later shows the race but can't change it.
+- **Quest Board:** visitor section (if any) with "Leaves …", this week's quests (Accept),
+  "Still open" (accepted in earlier weeks, from `my_quests()`; skip ids already on the
+  board), Completed, and the Monday toggle. Accepted quests not yet in a favor show
+  **Offer as a favor** and Abandon.
+- **Wardrobe:** the 8 slots (only backpack objects or any trait can be chosen), then
+  Backpack, Wearing, With another of your characters (hidden when empty), Traits,
+  Gestures. Each item shows where it came from; Drop needs a confirmation.
+- **Another member's character:** Connect circle ••• menu → "View character". Shows
+  their description and an **Act** menu built from your gestures' `label`.
+- **Offer help:** "Carry a quest?" picker. With a quest attached the message box is
+  replaced by the quest's prompt, locked, and the call is `propose_quest_favor`.
+- **Favors:** a "Quest · {title}" tag above the description on cards, favor detail and
+  Give a gem, from `favors.quest_title`.
+- **Celebrations:** after a gem arrives for a favor with `user_quest_id`, call
+  `quest_result_for_favor`; if completed, add "Quest complete — you've earned …". The
+  giver sees "This completed their quest “{title}”."
+- Send the device time zone (`set_time_zone`) after sign-in, so the board refreshes at
+  local Monday midnight.
+- Quest and gesture pushes route to Profile.
+

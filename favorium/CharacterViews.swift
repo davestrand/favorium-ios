@@ -140,11 +140,6 @@ struct CharacterSection: View {
             } else if store.character == nil {
                 createPrompt
             } else {
-                Text("Your character")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(FavoriumTheme.accent)
-                    .textCase(.uppercase)
-                    .accessibilityAddTraits(.isHeader)
                 CharacterDescriptionText(lines: store.description)
                 VStack(spacing: 1) {
                     link("Quest Board", icon: "scroll", detail: boardDetail) { QuestBoardView(store: store) }

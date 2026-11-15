@@ -7,7 +7,6 @@
 //
 
 import SwiftUI
-import PhotosUI
 import UIKit
 
 // MARK: - Stats model
@@ -45,20 +44,9 @@ struct ProfileTabView: View {
     @Environment(AppViewModel.self) private var appVM
     @Environment(AuthViewModel.self) private var authVM
 
-    @State private var showSignOutConfirm = false
-    @State private var showDeleteConfirm = false
-    @State private var isDeleting = false
-    @State private var deleteError: String?
     @State private var stats = ProfileStatsModel()
     @State private var characterStore = CharacterStore()
-    @State private var push = PushManager.shared
-    // Profile photo
-    @State private var showPhotoPicker = false
-    @State private var photoItem: PhotosPickerItem?
-    @State private var isSavingPhoto = false
-    @State private var photoError: String?
-    @Environment(\.openURL) private var openURL
-    @Environment(\.scenePhase) private var scenePhase
+    @State private var showSettings = false
 
     var body: some View {
         NavigationStack {
@@ -78,37 +66,27 @@ struct ProfileTabView: View {
                                 .padding(.bottom, 24)
                         }
 
-                        // ── Avatar / name ─────────────────────────────
-                        avatarSection
+                        // ── Portrait ──────────────────────────────────
+                        portrait
                             .padding(.horizontal, 24)
-                            .padding(.bottom, 28)
+                            .padding(.bottom, 24)
+
+                        // ── Character & quests (QUESTS_CONTRACT) ──────
+                        // With a character, its description is the name and title
+                        CharacterSection(store: characterStore)
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 24)
 
                         // ── Stats row ─────────────────────────────────
                         statsRow
                             .padding(.horizontal, 16)
-                            .padding(.bottom, 28)
-
-                        // ── Character & quests (QUESTS_CONTRACT) ──────
-                        CharacterSection(store: characterStore)
-                            .padding(.horizontal, 16)
-                            .padding(.bottom, 28)
-
-                        // ── Settings rows ─────────────────────────────
-                        settingsSection
-                            .padding(.horizontal, 16)
-                            .padding(.bottom, 32)
-
-                        // ── Sign out ──────────────────────────────────
-                        signOutButton
-                            .padding(.horizontal, 16)
-                            .padding(.bottom, 20)
-
-                        // ── Delete account (App Store 5.1.1(v)) ──────
-                        deleteAccountButton
-                            .padding(.horizontal, 16)
                             .padding(.bottom, 40)
                     }
+                    // Exactly the screen's width, so nothing on this page can make the
+                    // scroll view wider than the screen and let it drift sideways
+                    .containerRelativeFrame(.horizontal)
                 }
+                .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
                 // Content fades in over the fixed backdrop on the tab's first visit
                 .fadeInOnFirstAppear()
                 .refreshable {
@@ -117,6 +95,22 @@ struct ProfileTabView: View {
                     await characterStore.load(userId: appVM.userId)
                 }
             }
+            // Account housekeeping lives behind the gear, off the character sheet
+            .overlay(alignment: .topTrailing) {
+                Button { showSettings = true } label: {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundColor(FavoriumTheme.ivory)
+                        .frame(width: 44, height: 44)
+                        .background(FavoriumTheme.surface.opacity(0.7))
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(FavoriumTheme.accentMuted.opacity(0.3), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 16)
+                .padding(.top, 4)
+                .accessibilityLabel("Settings")
+            }
             .navigationBarHidden(true)
             // Re-runs whenever the tab appears, so counts reflect gems just given or received
             .task {
@@ -124,167 +118,49 @@ struct ProfileTabView: View {
                 await appVM.refreshTitle()
                 await characterStore.load(userId: appVM.userId)
             }
-            .confirmationDialog(
-                "Sign out of Favorium?",
-                isPresented: $showSignOutConfirm,
-                titleVisibility: .visible
-            ) {
-                Button("Sign Out", role: .destructive) {
-                    Task { await appVM.signOut(authVM: authVM) }
-                }
-                Button("Cancel", role: .cancel) { }
-            }
-            .confirmationDialog(
-                "Delete your account?",
-                isPresented: $showDeleteConfirm,
-                titleVisibility: .visible
-            ) {
-                Button("Delete Account", role: .destructive) { deleteAccount() }
-                Button("Cancel", role: .cancel) { }
-            } message: {
-                Text("This happens right away. You\u{2019}ll be signed out and can\u{2019}t sign back in, your name and photo are removed, and favors that haven\u{2019}t started yet are cancelled. Gems you\u{2019}ve given and the favor history you share with others stay with them, shown as \u{201C}Deleted member\u{201D}. This can\u{2019}t be undone.")
-            }
-            .alert("Couldn\u{2019}t delete your account",
-                   isPresented: Binding(get: { deleteError != nil }, set: { if !$0 { deleteError = nil } })) {
-                Button("OK") { }
-            } message: {
-                Text(deleteError ?? "")
+            .sheet(isPresented: $showSettings) {
+                SettingsView(store: characterStore)
+                    .environment(appVM)
+                    .environment(authVM)
             }
         }
     }
 
-    private func deleteAccount() {
-        isDeleting = true
-        Task {
-            do {
-                try await appVM.deleteAccount(authVM: authVM)
-            } catch {
-                deleteError = SupabaseService.errorMessage(error)
-            }
-            isDeleting = false
-        }
-    }
+    // MARK: - Portrait
 
-    // MARK: - Avatar
-
-    private var avatarSection: some View {
+    /// The photo in its title frame. The name and title show here only until there's a
+    /// character, whose description opens with them ("You see Dave, Samaritan of Favorium.").
+    private var portrait: some View {
         VStack(spacing: 12) {
-            // Same avatar others see for you — tap to add or change your photo
-            Button { showPhotoPicker = true } label: {
-                PersonAvatar(userId: appVM.userId, name: appVM.displayName, photo: appVM.avatarURL,
-                             level: appVM.helperLevel, size: 88)
-                    .overlay {
-                        if isSavingPhoto {
-                            Circle().fill(.black.opacity(0.45))
-                            ProgressView().tint(FavoriumTheme.ivory)
-                        }
-                    }
-                    .overlay(alignment: .bottomTrailing) {
-                        Image(systemName: "camera.fill")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(FavoriumTheme.onGold)
-                            .frame(width: 28, height: 28)
-                            .background(FavoriumTheme.goldGradient)
-                            .clipShape(Circle())
-                            .overlay(Circle().stroke(FavoriumTheme.background, lineWidth: 2))
-                    }
-                    .shadow(color: FavoriumTheme.accent.opacity(0.25), radius: 16)
-            }
-            .buttonStyle(.plain)
-            .disabled(isSavingPhoto)
-            // Room for the halo, which floats above the avatar
-            .padding(.top, appVM.helperTitle == nil ? 0 : 22)
-            .accessibilityLabel(appVM.avatarURL == nil ? "Add profile photo" : "Change profile photo")
+            PersonAvatar(userId: appVM.userId, name: appVM.displayName, photo: appVM.avatarURL,
+                         level: appVM.helperLevel, size: 104)
+                .shadow(color: FavoriumTheme.accent.opacity(0.25), radius: 16)
+                // Room for the halo, which floats above the avatar
+                .padding(.top, appVM.helperTitle == nil ? 0 : 22)
+                .accessibilityHidden(true)
 
-            HStack(spacing: 16) {
-                Button(appVM.avatarURL == nil ? "Add photo" : "Change photo") { showPhotoPicker = true }
-                if appVM.avatarURL != nil {
-                    Button("Remove photo", role: .destructive) { removePhoto() }
-                        .foregroundColor(FavoriumTheme.ivoryDim)
-                }
-            }
-            .font(.system(size: 13, weight: .semibold))
-            .foregroundColor(FavoriumTheme.accent)
-            .disabled(isSavingPhoto)
-
-            if let photoError {
-                Text(photoError)
-                    .font(FavoriumTheme.captionFont)
-                    .foregroundColor(FavoriumTheme.amber)
-                    .multilineTextAlignment(.center)
-            }
-
-            VStack(spacing: 4) {
-                Text(appVM.displayName.isEmpty ? "Your name" : appVM.displayName)
-                    .font(.system(size: 22, weight: .semibold, design: .serif))
-                    .foregroundColor(FavoriumTheme.ivory)
-                    .multilineTextAlignment(.center)
-
-                // No title until 3 different people have confirmed your help
-                if let title = appVM.helperTitle {
-                    VStack(spacing: 2) {
+            if characterStore.hasLoaded && characterStore.character == nil {
+                VStack(spacing: 4) {
+                    Text(appVM.displayName.isEmpty ? "Your name" : appVM.displayName)
+                        .font(.system(size: 22, weight: .semibold, design: .serif))
+                        .foregroundColor(FavoriumTheme.ivory)
+                        .multilineTextAlignment(.center)
+                    // No title until 3 different people have confirmed your help
+                    if let title = appVM.helperTitle {
                         Text(title.displayName)
                             .font(.system(size: 15, weight: .semibold, design: .serif))
                             .foregroundColor(FavoriumTheme.accent)
-                        Text(title.meaning)
-                            .font(FavoriumTheme.captionFont)
-                            .foregroundColor(FavoriumTheme.ivoryDim)
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    .padding(.bottom, 4)
-                    .accessibilityElement(children: .combine)
                 }
-
-                if !appVM.email.isEmpty {
-                    Label(appVM.email, systemImage: "envelope")
-                        .font(FavoriumTheme.captionFont)
-                        .foregroundColor(FavoriumTheme.ivoryDim)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .textSelection(.enabled)
-                }
+                .accessibilityElement(children: .combine)
             }
-            .accessibilityElement(children: .combine)
-        }
-        .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .images)
-        .onChange(of: photoItem) { _, item in
-            guard let item else { return }
-            savePhoto(item)
-        }
-    }
 
-    // MARK: - Photo upload (IOS_CONTRACT §11a)
-
-    private func savePhoto(_ item: PhotosPickerItem) {
-        guard let userId = appVM.userId else { return }
-        isSavingPhoto = true
-        photoError = nil
-        Task {
-            defer { isSavingPhoto = false; photoItem = nil }
-            do {
-                guard let data = try await item.loadTransferable(type: Data.self),
-                      let jpeg = AvatarImage.squareJPEG(from: data) else {
-                    photoError = "That photo couldn\u{2019}t be read. Try another one."
-                    return
-                }
-                appVM.avatarURL = try await SupabaseService.shared.uploadAvatar(jpeg: jpeg, userId: userId)
-            } catch {
-                photoError = "Couldn\u{2019}t save your photo: \(error.localizedDescription)"
-            }
-        }
-    }
-
-    private func removePhoto() {
-        isSavingPhoto = true
-        photoError = nil
-        Task {
-            defer { isSavingPhoto = false }
-            do {
-                try await SupabaseService.shared.clearAvatar()
-                appVM.avatarURL = nil
-            } catch {
-                photoError = "Couldn\u{2019}t remove your photo: \(error.localizedDescription)"
+            if let title = appVM.helperTitle {
+                Text(title.meaning)
+                    .font(FavoriumTheme.captionFont)
+                    .foregroundColor(FavoriumTheme.ivoryDim)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -333,136 +209,6 @@ struct ProfileTabView: View {
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(label): \(value.map(String.init) ?? "loading")")
-    }
-
-    // MARK: - Settings
-
-    private var settingsSection: some View {
-        VStack(spacing: 1) {
-            notificationsRow
-            settingsRow(icon: "questionmark.circle", label: "Help & Feedback", url: FavoriumWeb.help)
-            settingsRow(icon: "envelope", label: "Contact support",
-                        url: FavoriumWeb.supportMail(subject: "Favorium iOS \u{2014} account help"))
-            settingsRow(icon: "info.circle", label: "About Favorium", url: FavoriumWeb.about)
-            settingsRow(icon: "lock", label: "Privacy", url: FavoriumWeb.privacy)
-            settingsRow(icon: "doc.text", label: "Terms", url: FavoriumWeb.terms)
-        }
-        // Web pages open in an in-app browser so people stay in Favorium
-        .environment(\.openURL, OpenURLAction { url in .systemAction(url, prefersInApp: true) })
-        .background(FavoriumTheme.surface)
-        .clipShape(RoundedRectangle(cornerRadius: FavoriumTheme.cardRadius))
-        .overlay(
-            RoundedRectangle(cornerRadius: FavoriumTheme.cardRadius)
-                .stroke(FavoriumTheme.accentMuted.opacity(0.2), lineWidth: 1)
-        )
-    }
-
-    // MARK: - Notifications
-
-    private var notificationsEnabled: Bool {
-        push.authorizationStatus == .authorized || push.authorizationStatus == .provisional
-            || push.authorizationStatus == .ephemeral
-    }
-
-    /// Never asked → show the system prompt. Allowed or denied → open the app's
-    /// notification settings (iOS only lets an app ask once).
-    private var notificationsRow: some View {
-        Button {
-            if push.canAskPermission {
-                Task { await push.requestAuthorization() }
-            } else if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
-                openURL(url)
-            }
-        } label: {
-            HStack(spacing: 14) {
-                Image(systemName: notificationsEnabled ? "bell.badge" : "bell.slash")
-                    .font(.system(size: 16))
-                    .foregroundColor(FavoriumTheme.accent)
-                    .frame(width: 24)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Notifications")
-                        .font(FavoriumTheme.bodyFont)
-                        .foregroundColor(FavoriumTheme.ivory)
-                    Text(notificationsEnabled
-                         ? "New offers and gems you receive"
-                         : (push.canAskPermission ? "Tap to turn on" : "Turn on in Settings"))
-                        .font(FavoriumTheme.captionFont)
-                        .foregroundColor(FavoriumTheme.ivoryDim)
-                }
-                Spacer()
-                Text(notificationsEnabled ? "On" : "Off")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(notificationsEnabled ? FavoriumTheme.accent : FavoriumTheme.ivoryDim)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12))
-                    .foregroundColor(FavoriumTheme.ivoryDim)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        // Re-check when returning from iOS Settings, where the user may have flipped it
-        .task(id: scenePhase) {
-            if scenePhase == .active { await push.refreshAuthorizationStatus() }
-        }
-        .accessibilityLabel("Notifications, \(notificationsEnabled ? "on" : "off")")
-    }
-
-    private func settingsRow(icon: String, label: String, url: URL) -> some View {
-        Link(destination: url) {
-            HStack(spacing: 14) {
-                Image(systemName: icon)
-                    .font(.system(size: 16))
-                    .foregroundColor(FavoriumTheme.accent)
-                    .frame(width: 24)
-                Text(label)
-                    .font(FavoriumTheme.bodyFont)
-                    .foregroundColor(FavoriumTheme.ivory)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12))
-                    .foregroundColor(FavoriumTheme.ivoryDim)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - Delete account
-
-    private var deleteAccountButton: some View {
-        Button { showDeleteConfirm = true } label: {
-            HStack(spacing: 8) {
-                if isDeleting { ProgressView().tint(FavoriumTheme.ivoryDim) }
-                Text("Delete Account")
-                    .font(.system(size: 14, weight: .medium))
-            }
-            .foregroundColor(FavoriumTheme.ivoryDim)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-        }
-        .disabled(isDeleting)
-    }
-
-    // MARK: - Sign Out
-
-    private var signOutButton: some View {
-        Button { showSignOutConfirm = true } label: {
-            Text("Sign Out")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(FavoriumTheme.amber)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(FavoriumTheme.surface)
-                .clipShape(RoundedRectangle(cornerRadius: FavoriumTheme.rowRadius))
-                .overlay(
-                    RoundedRectangle(cornerRadius: FavoriumTheme.rowRadius)
-                        .stroke(FavoriumTheme.amber.opacity(0.3), lineWidth: 1)
-                )
-        }
     }
 }
 

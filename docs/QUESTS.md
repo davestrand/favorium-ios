@@ -286,10 +286,22 @@ moderation of content is needed. Report and block still work on the sender.
 
 ---
 
-## 8. iOS screens (planned)
+## 8. iOS screens (built)
+
+The Profile tab became a character page with settings behind a gear. The full layout,
+for Android parity, is in `ANDROID_HANDOFF.md` §17.
 
 | Screen | Where | What |
 |---|---|---|
+| Character card | Profile | Description, Quest Board / Wardrobe / Received links, Change appearance |
+| Character creator | Profile ("Begin" / "Change appearance") | Pronouns, race (all at once, permanent), appearance |
+| Another member's character | Connect circle menu → View character | Their description, Act menu |
+| Quest Board | Profile → Quest Board | Visitor, this week, still open, completed, Monday toggle, Offer as a favor |
+| Wardrobe | Profile → Wardrobe | Slots; backpack, wearing, traits, gestures; drop |
+| Offer help | Favors → Offer a favor, or Quest Board | "Carry a quest?" picker; prompt locked |
+| Settings | Profile → gear | Photo, email, notifications (incl. Monday quests), help and legal, sign out, delete |
+
+---|---|---|
 | Character creator | Profile + post-sign-up card | Pronouns, race (all at once, permanent), appearance |
 | Character description | Profile, other person's profile | Rendered `LOOK` text |
 | Wardrobe / Inventory | Profile | Choose shown terms, slots, hairstyle; see everything earned |
