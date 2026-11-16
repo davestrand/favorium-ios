@@ -137,10 +137,11 @@ struct HallGesture: Decodable, Identifiable, Sendable {
 struct HallSendResult: Decodable, Sendable {
     /// The receiver's sentence ("…to you.")
     var rendered: String? = nil
-    /// The sender's own line, once the server sends it
+    /// The sender's own line, naming the recipient (QUESTS_CONTRACT §7.10)
     var rendered_sender: String? = nil
     var connected: Bool? = nil
     var stranger: Bool? = nil
+    var room_key: String? = nil
 }
 
 /// A gesture someone made toward you; it waits here until you mark it read.
@@ -164,7 +165,7 @@ struct HallReceivedLog: Decodable, Sendable {
     var items: [HallReceivedAction]? = nil
 }
 
-/// `room_listen()`: voices per room, counts only, never names
+/// `room_listen()`: voices per room, counts only, never names. The room you're in is left out.
 struct RoomListen: Decodable, Sendable {
     struct Row: Decodable, Identifiable, Sendable {
         let key: String
@@ -174,6 +175,8 @@ struct RoomListen: Decodable, Sendable {
     }
     var here: String? = nil
     var rooms: [Row]? = nil
+    /// The exit label back to the Hall; null in the Hall
+    var way_to_hall: String? = nil
 }
 
 struct RoomActResult: Decodable, Sendable {

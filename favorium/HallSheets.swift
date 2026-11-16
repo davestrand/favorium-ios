@@ -699,6 +699,20 @@ struct HallListenSheet: View {
                             ProgressView().tint(FavoriumTheme.accent)
                         }
                         ForEach(listen?.rooms ?? []) { row($0) }
+                        // The way back to the board, from wherever you are
+                        if let way = listen?.way_to_hall, exits.contains(where: { $0.key == "hall" }) {
+                            Button {
+                                dismiss()
+                                Task { await store.move(to: "hall", via: way) }
+                            } label: {
+                                Label(way, systemImage: "arrow.uturn.backward")
+                                    .font(.system(size: 14, weight: .semibold, design: .serif))
+                                    .foregroundColor(FavoriumTheme.accent)
+                                    .frame(minHeight: 44)
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.top, 6)
+                        }
                     }
                     .hallPage()
                     .padding(20)

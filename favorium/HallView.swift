@@ -306,21 +306,11 @@ final class HallStore {
     func send(_ gesture: HallGesture, to person: HallPerson) async {
         do {
             let result = try await service.hallSendAction(to: person.id, actionKey: gesture.key)
-            // Until the server sends the sender's own line (docs/WEB_REQUEST_2026-11-16_GESTURE_SENDER.md)
-            note(result.rendered_sender ?? result.rendered.map { Self.sendersView($0, to: person.name) } ?? gesture.label)
+            // The sender's own line; an older server only sends the receiver's
+            note(result.rendered_sender ?? result.rendered ?? gesture.label)
         } catch {
             note(SupabaseService.errorMessage(error), refusal: true)
         }
-    }
-
-    /// `rendered` is the receiver's sentence ("Dave bows his head to you."). In the
-    /// sender's own story the closing "you" is the person it went to; the server's verb
-    /// and pronoun are kept as they are.
-    static func sendersView(_ rendered: String, to name: String) -> String {
-        guard let range = rendered.range(of: #"\byou\b"#, options: [.regularExpression, .backwards]) else {
-            return rendered
-        }
-        return rendered.replacingCharacters(in: range, with: name)
     }
 
     func markSeen() async throws {
@@ -447,7 +437,10 @@ struct HallView: View {
             if room.inRoom {
                 prose(exitsLine(room))
                 if let scenery = sceneryLine(room) { prose(scenery) }
-                if let openObject { RoomObjectPanel(store: store, room: room, name: openObject) }
+                if let openObject {
+                    RoomObjectPanel(store: store, room: room, name: openObject,
+                                    onReadBoard: isBoard(openObject, in: room) ? { showBoard = true } : nil)
+                }
                 prose(alsoHereLine)
                 prose(standingLine(room))
             } else {
@@ -560,14 +553,16 @@ struct HallView: View {
         guard !objects.isEmpty else { return nil }
         var line = AttributedString("You also see ")
         for (index, name) in objects.enumerated() {
+            // "a bench and a lamp"; "a bench, a lamp, and the shelves", as the web reads
             if index > 0 {
-                line += AttributedString(index == objects.count - 1 ? " and " : ", ")
+                line += AttributedString(objects.count == 2 ? " and " : (index == objects.count - 1 ? ", and " : ", "))
             }
             let text = Self.withArticle(name)
-            if isBoard(name, in: room) {
-                line += link(text, "board")
-            } else if RoomObjectPanel.isExaminable(name, in: room) {
+            if RoomObjectPanel.isExaminable(name, in: room) {
+                // The board too, when it has a look or an act: the panel offers its notices
                 line += link(text, "object/\(index)")
+            } else if isBoard(name, in: room) {
+                line += link(text, "board")
             } else {
                 line += AttributedString(text)
             }
@@ -1048,6 +1043,8 @@ struct RoomObjectPanel: View {
     @Bindable var store: HallStore
     let room: HallRoom
     let name: String
+    /// Set for the Hall's board: the notices themselves open from its panel
+    var onReadBoard: (() -> Void)? = nil
 
     /// The rendered line of each act done here; it stays until you leave the room
     @State private var lines: [String: String] = [:]
@@ -1077,6 +1074,16 @@ struct RoomObjectPanel: View {
                         .foregroundColor(FavoriumTheme.ivoryDim)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+            }
+            if let onReadBoard {
+                Button(action: onReadBoard) {
+                    Label("Read the notices", systemImage: "scroll")
+                        .font(.system(size: 15, weight: .semibold))
+                        .padding(.horizontal, 18)
+                        .frame(minHeight: 44)
+                        .metallicGoldCapsule()
+                }
+                .buttonStyle(.plain)
             }
             // A list, though there's one act per room today, so a second needs no release
             ForEach(actions) { action in actRow(action) }
@@ -1183,7 +1190,7 @@ struct RoomObjectPanel: View {
         store.note("Wren arrives.")
         store.note("Wren leaves.")
         store.note("You take on \u{201C}Carry something heavy\u{201D}.")
-        store.note(HallStore.sendersView("Dave raises his hand in greeting to you.", to: "Jellybean"))
+        store.note("Dave raises his hand in greeting to Jellybean.")
         store.note("You go through the door to the garden.")
         store.note("The Garden", heading: true)
         store.note("Jo arrives from the Hall.")
