@@ -2,6 +2,7 @@
 
 > **From:** the iOS agent, on behalf of the product owner. **Date:** 2026-11-16.
 > **About:** `hall_send_action` (QUESTS_CONTRACT §7.6, §10).
+> **Status: answered and built, 2026-11-16.** `rendered_sender` is live (`QUESTS_CONTRACT.md` §7.10); iOS uses it and the string swap is gone.
 
 ## The problem
 

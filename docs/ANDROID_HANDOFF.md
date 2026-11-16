@@ -41,8 +41,8 @@ inside a gem.
 
 ## 3. Screens (iOS file → what it does)
 
-Root: `ContentView.swift`. AuthView until signed in, then three tabs: **Collection**,
-**Favors**, **Profile**.
+Root: `ContentView.swift`. AuthView until signed in, then four tabs: **Collection**,
+**Favors**, **Hall** (badged with unread gestures toward you) and **Profile**.
 
 | iOS file | Screen |
 |---|---|
@@ -57,10 +57,13 @@ Root: `ContentView.swift`. AuthView until signed in, then three tabs: **Collecti
 | `SendGemView.swift` | Give a gem for a completed favor (pick the gem or the favor) |
 | `FavorGivenView.swift` | Celebrations: "Favor given" (giver) and "A gem arrived" (helper) |
 | `ConnectView.swift` | Pairing: show your code/QR, redeem someone else's code, your circle |
-| `ProfileTabView.swift` | The character page: portrait, character description, Quest Board / Wardrobe links, stats, and a gear for Settings (see §17) |
+| `ProfileTabView.swift` | The character page: portrait, character description, Wardrobe link, stats, and a gear for Settings (see §17) |
 | `SettingsView.swift` | Settings sheet from the gear: photo, email, notifications, Help/Contact/About/Privacy/Terms, sign out, delete account |
 | `CharacterViews.swift` | Character store, the Profile character card, the character creator, another member's character + Act menu |
-| `QuestBoardView.swift` | Quest Board, Wardrobe (backpack / wearing / traits / gestures), gestures received |
+| `QuestBoardView.swift` | Wardrobe (backpack / wearing / traits / gestures) and gestures received. The old Quest Board screen is gone: the board lives in the Hall |
+| `HallView.swift` | The Hall tab: the room you stand in, its story, the verb bar, and the scenery panel (see §18) |
+| `HallSheets.swift` | Opened from the rooms: the quest board (Hall only), another person, ME, LISTEN, first-run gifts |
+| `HallService.swift` | Every Hall and room backend call and model |
 | `CharacterService.swift` | Every quest and character backend call and model |
 | `HelperTitles.swift` | Titles, avatar frames, "title earned" celebration |
 | `EngraveGemView.swift` | Write a secret into a gem |
@@ -152,6 +155,9 @@ Two layers, both deterministic from the gem's DNA so a gem looks identical every
    - **Traits:** rolled once at mint and stored in DNA, never changed by transfers.
      **iOS draws trait overlays on purpose**, even though the backend contract says not to.
      That was the user's call; match iOS.
+
+Test vectors (RNG outputs, DNA → colours/family, interior layouts) are in
+`ANDROID_GEM_REFERENCE_VALUES.md`.
 
 Assets to copy: everything in `Assets.xcassets` (gems, frames, tab icons, `stat_originals`,
 app icon). Export at matching densities.
@@ -274,7 +280,8 @@ Android needs FCM:
 - The app registers its FCM token with `p_platform: "android"`.
 
 Payload keys the app reads: `favorId`, `kind`, `route` (`favors` | `collection` |
-`profile`). Tapping a push opens that tab.
+`hall` | `profile`). Tapping a push opens that tab. **Route on `route` alone.** Every quest
+and gesture push now carries `route: "hall"`; only the helper-title push uses `profile`.
 
 - **Known kinds:** transferred, title, nudge, gift, plus favor-state pushes.
   Copy is owned by PUSH_CONTRACT; don't reword it in the app.
@@ -357,8 +364,9 @@ the experience". Match this layout.
    first line already says them ("You see Dave, Samaritan of Favorium.").
    The portrait is not tappable; the photo is changed in Settings.
 4. **Character card:** with no character, "Create your character" and a Begin button.
-   With one, the description lines (serif, first line larger), then links to Quest Board
-   ("N new"), Wardrobe ("N earned") and Received (only if any), then "Change appearance".
+   With one, the description lines (serif, first line larger), then links to Wardrobe
+   ("N earned") and Received (only if any), then "Change appearance". The Quest Board
+   link is gone: quests live in the Hall tab (§18).
    No "Your character" heading.
 5. **Stats:** gems held, originals, favors.
 
@@ -368,7 +376,7 @@ Nothing else. No email, no settings rows, no sign out on this page.
 - **Account:** avatar with Change photo / Remove, the name, the email.
 - **Notifications:** the system notification row (as before), and, only for members with
   a character, a **"New quests on Mondays"** toggle (`set_quest_push`, read from
-  `my_character().quest_push`). It is the same setting as the toggle on the Quest Board.
+  `my_character().quest_push`). This is now the only place it is shown.
   While it's on, an **"Arrives at"** picker: "Default (8 AM)" (sends null) then 7 AM–9 PM
   (`set_quest_push_hour`, 7–21; read `quest_push_hour`, `quest_push_hour_is_custom`,
   `quest_push_default_hour` from `my_character()`). Never offer hours outside 7–21.
@@ -382,12 +390,10 @@ can't drift sideways.
 ### Other quest screens
 
 - **Character creator** (sheet): pronouns, then **every race at once** with its flavor
-  text (from `catalog()`, never hard-coded), then optional appearance. Confirm before
-  creating: "Your race is permanent". Editing later shows the race but can't change it.
-- **Quest Board:** visitor section (if any) with "Leaves …", this week's quests (Accept),
-  "Still open" (accepted in earlier weeks, from `my_quests()`; skip ids already on the
-  board), Completed, and the Monday toggle. Accepted quests not yet in a favor show
-  **Offer as a favor** and Abandon.
+  text (from `catalog()`, never hard-coded), then appearance. **When creating, every
+  choice starts on its first option**, so one tap is enough. Confirm before creating:
+  "Your race is permanent". Editing later shows the race but can't change it.
+- **The quest board** is now an object in the Hall (§18), not a screen of its own.
 - **Wardrobe:** the 8 slots (only backpack objects or any trait can be chosen), then
   Backpack, Wearing, With another of your characters (hidden when empty), Traits,
   Gestures. Each item shows where it came from; Drop needs a confirmation.
@@ -402,5 +408,82 @@ can't drift sideways.
   giver sees "This completed their quest “{title}”."
 - Send the device time zone (`set_time_zone`) after sign-in, so the board refreshes at
   local Monday midnight.
-- Quest and gesture pushes route to Profile.
+- Quest and gesture pushes route to the Hall (`route: "hall"`).
+
+## 18. The Hall and its rooms (added 2026-11-16)
+
+The Hall is **the only quest surface** and a place to hang out, laid out like a MUD room in
+Favorium's Deco style. Read these first: `QUESTS_CONTRACT.md` §10 to §10.7 (authoritative for
+every shape), the web agent's `APP_HANDOFF_2026-11-16_HALL.md` and
+`APP_HANDOFF_2026-11-16_ROOMS.md`. Then port `HallView.swift`, `HallSheets.swift` and
+`HallService.swift`. Every word of room copy, every gesture sentence and every refusal comes
+from the server: render it verbatim, never compose or reword it.
+
+**Rooms.** Four rooms: `hall` (the hub, with the board), `garden`, `library`, `snack_bar`.
+You come in through the Hall (`hall_enter`) and walk through exits (`room_move`, which
+returns the next room already rendered). You are in one room at a time. Read with
+`room_view()` (null = where you stand). **Branch on `me.in_room`, never `me.present`.**
+
+**The page**, one scrolling page of serif prose on a soft "page" behind the text (so the
+backdrop's rays don't cross the words):
+1. ✦ Title ✦, then the intro paragraphs, then one indented italic ambience line that changes
+   every 11 s with a half-second fade, at random, never repeating. Never tie it to who is there.
+2. Inside a room: **Obvious exits:** each exit's `label` as a gold link, the Hall exit with an
+   amber "N new" (its `board_new`). Then **You also see …**: scenery names joined "a, b, and c";
+   a name without an article gets "the". Only names with a look or an act are links. Then
+   **Also here:** names as links (people in this room only), and where you stand.
+3. Outside (not present): the Hall's doorway. No people, no scenery: "You are standing in the
+   doorway. The board is just inside" with its new count, and "Obvious paths: into the hall".
+   Without a character: "make your character" instead.
+4. **What has passed:** the story (below).
+
+**Tapping a scenery name** unfolds its `look` (italic), `detail` (smaller) and the room's act as
+an outlined button carrying `label`. One object open at a time; walking elsewhere closes it.
+`room_act` answers `ok: true` with `rendered` (show it under the button until you leave the room)
+or `ok: false` with a quiet `message` beside the button. Both are HTTP 200: branch on `ok`.
+The button rests for `retry_after_seconds` / `cooldown_seconds` with a countdown inside it.
+In the Hall, **the board** opens its panel with a gold **Read the notices** button plus its act.
+
+**The verb bar** (fixed, opaque, above the tab bar, 48 dp tall targets):
+- Inside: BOARD (Hall only) · LISTEN · GESTURE · ME · SNEAK · OUT.
+- Outside: ME · SNEAK · IN. Without a character: BEGIN.
+- **LISTEN**: `room_listen()` rows of title + "quiet" / "one voice" / "N voices". Counts only,
+  never names. A row is tappable only if it is one of this room's exits. `way_to_hall` is a
+  quiet button at the foot.
+- **GESTURE**: people here, then the gestures you may make to each. Free greetings to anyone;
+  earned gestures only to connections (`hall_gestures()`, filter by `person.connected`).
+- **ME**: your description, your pack with **Put it on**, your open quests (`my_quests()`
+  works in any room), and the wardrobe.
+- **SNEAK**: per stay; hides your card only. Its explanation is "You still see everyone and your
+  visit still counts. Nobody sees your card."
+
+**Presence.** Heartbeat every `heartbeat_seconds` only while the Hall tab is visible and the
+app is in the foreground. Leaving the tab calls `hall_leave()`. Back from the background while
+on the tab: `hall_enter` then `room_move(lastRoom)`. Do the same if a heartbeat finds presence
+lapsed. Present within the TTL on relaunch: keep standing. Never show the TTL.
+
+**Another person** (tap their name): their description verbatim, with lines that are new since
+this device last saw them picked out in gold with ✦. Below: their signature, "In your circle",
+gesture buttons, and, for connections, **Offer "{quest}"** for each of your open quests
+(`propose_quest_favor`, after a confirmation that shows the prompt).
+
+**The story ("What has passed")**: gestures toward you (`hall_received_actions`, server) woven
+with what happened on this device today. Today's local lines are kept on the device per account:
+arrivals and departures (worked out between two reads of the same room, using `arrived_from`
+for "Jo arrives from the Garden."), your moves, quest actions, things you put on, refusals in
+amber, and "You notice something new about Jo: …" when someone's description gained a line.
+- Shows the **latest 5 lines plus every unread gesture**; older ones fold behind
+  "Earlier today · N". A **room heading** ("— The Garden —") appears above lines from that room.
+- Unread gestures: "New" mark and warm tint; "N new" in the header; read only by tapping
+  **Mark these as read**, never on open or scroll.
+- Your own gestures show the server's **`rendered_sender`** ("Dave raises his hand in
+  greeting to Jellybean."); fall back to `rendered` only for an old server.
+- A gesture toward you from someone still in your room gets a ↩: tap it to return a gesture.
+
+**After creating a character**: a "Welcome to the hall" sheet shows the signature gesture and
+the starter item, which is **in the pack, not worn**, with **Put it on**. Never auto-equip it.
+
+**Not built and not to build**: any way to connect inside the Hall, gestures to someone who
+isn't in your room, a sends-left counter, or a push when a connection enters (still a product
+question).
 

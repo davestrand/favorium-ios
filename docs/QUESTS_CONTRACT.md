@@ -35,6 +35,16 @@ the shared default, so nothing changes for them. See §3, §6 and §7.5.
 **`rendered_sender`** — the same act, addressed to the recipient by name, for the sender's own story.
 No client needs to rewrite `rendered` any more. See §7.10. The reply sent back to iOS is
 `APP_REPLY_2026-11-16_GESTURE_SENDER.md`.
+**Revised 2026-11-16 (Hall routing):** every quest push now carries **`route: "hall"`** instead of
+`"profile"` — `quest_board`, `visitor_arrived`, `visitor_leaving`, `quest_complete` and `action`. A tap
+opens the Hall, because the board, the visit and the gesture log all live there. The helper-title push
+is now the **only** thing that routes to `profile`. Filed from iOS, whose client is the one in hand;
+no Android client exists yet. See §7.4.
+**Corrected 2026-11-16 (gesture refusal):** §10.3 still printed the retired
+`They are no longer in the hall.` and so did the Hall brief. `hall_send_action` raises
+**`They aren't here.`**, and it raises it from two places — the recipient is absent, hidden or in
+another room, **and** the caller is not standing anywhere. §10.3 also records
+`You have not learned that gesture yet.`, which was live but written down nowhere.
 
 **v1.2 in one paragraph — if your copy still says v1.1, these are the deltas.** A quest is
 completed **only inside a Favor** (§7): `propose_quest_favor` carries it, `quest_result_for_favor`
@@ -372,8 +382,17 @@ push (§7.4) arrives separately as the durable record.
 ### 7.4 Pushes
 
 Queued by the database into `push_queue` and drained by `notify-gem` — the same
-drain as the gem pushes, so there is nothing new to configure. All quest kinds
-carry `route: "profile"`, so tapping any of them opens Profile.
+drain as the gem pushes, so there is nothing new to configure.
+
+**Every quest kind carries `route: "hall"`, so tapping any of them opens the Hall** (changed
+2026-11-16 — it was `"profile"`). The Hall is where the thing being announced actually is: the
+board, the visit that is ending, the gesture log. There is no Profile hop and no client-side
+remapping: route on `route` alone. **iOS is the client this is written for**; Android has not been
+built yet, so `PUSH_CONTRACT.md` §13 is the same rule stated ahead of that client.
+
+`thread-id` is the route, so these five group together under `hall` and never with favor pushes.
+**`profile` is now carried by one push only** — the helper title (`PUSH_CONTRACT.md` §7.3), which is
+celebrated on the member's own profile.
 
 | `kind` | when | Title | Body |
 |---|---|---|---|
@@ -491,7 +510,8 @@ Three consequences for clients:
 - **The daily-limit error is retired.** Delete any branch that switches on
   `You have already sent them as many actions as one day allows.`
 - **The gesture push is not gated by `quest_push`** (§7.4). Nothing else about it
-  changed: `kind: "action"`, `route: "profile"`, title `An action for you`.
+  changed: `kind: "action"`, `route: "hall"` (was `"profile"` — see §7.4), title
+  `An action for you`.
 
 ### 7.9 Overnight delivery — fixed 2026-11-15
 
@@ -640,9 +660,11 @@ available; only `room_view()` would need to change.
 
 | Gate | Result |
 |---|---|
-| target not present, hidden, or blocked | `They are no longer in the hall.` / `Not found` |
+| caller not standing anywhere | `They aren't here.` |
+| target not present, hidden, in another room, or blocked | `They aren't here.` / `Not found` |
 | gesture is a greeting in `hall_free_actions` | allowed to anyone present |
 | gesture is earned and the pair is connected | allowed, uncapped |
+| gesture is earned and you do **not** own it | `You have not learned that gesture yet.` |
 | gesture is earned and the pair is **not** connected | `Keep that gesture for someone you are connected to.` |
 | second greeting to the same unconnected person within 24 h | `You have already greeted them today. Connect with them to say more.` |
 

@@ -156,16 +156,10 @@ extension PushManager: UNUserNotificationCenterDelegate {
         withCompletionHandler completionHandler: @escaping @Sendable () -> Void
     ) {
         // Read what we need here; the response object isn't Sendable
-        let userInfo = response.notification.request.content.userInfo
-        let routeName = userInfo["route"] as? String
-        let kind = userInfo["kind"] as? String
+        // Quest and gesture pushes carry route "hall" (QUESTS_CONTRACT §7.4); route on that alone
+        let routeName = response.notification.request.content.userInfo["route"] as? String
         DispatchQueue.main.async {
-            // The board, visitors and gestures live in the Hall now; the server still routes
-            // quest pushes to "profile", which keeps "Quest complete" next to the reward
-            let hallKinds: Set<String> = ["quest_board", "visitor_arrived", "visitor_leaving", "action"]
-            PushManager.shared.pendingRoute = kind.map(hallKinds.contains) == true
-                ? .hall
-                : routeName.flatMap(Route.init(rawValue:)) ?? .favors
+            PushManager.shared.pendingRoute = routeName.flatMap(Route.init(rawValue:)) ?? .favors
             completionHandler()
         }
     }

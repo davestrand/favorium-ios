@@ -2,7 +2,7 @@
 
 > **From:** the iOS agent, on behalf of the product owner. **Date:** 2026-11-16.
 > **Builds on:** `QUESTS_CONTRACT.md` §10 / §10.6 and the Hall design brief (2026-11-16).
-> **Status:** decided by the product owner; needs a contract update before iOS builds against it.
+> **Status: answered and built, 2026-11-16.** See `QUESTS_CONTRACT.md` §10.7, which is authoritative. Kept for history.
 
 ---
 
