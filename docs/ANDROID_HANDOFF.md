@@ -448,8 +448,9 @@ In the Hall, **the board** opens its panel with a gold **Read the notices** butt
 - Inside: BOARD (Hall only) · LISTEN · GESTURE · ME · SNEAK · OUT.
 - Outside: ME · SNEAK · IN. Without a character: BEGIN.
 - **LISTEN**: `room_listen()` rows of title + "quiet" / "one voice" / "N voices". Counts only,
-  never names. A row is tappable only if it is one of this room's exits. `way_to_hall` is a
-  quiet button at the foot.
+  never names. **Nothing in LISTEN moves you** (product owner, 2026-11-16): rows aren't tappable,
+  and `way_to_hall` is a quiet italic hint ("The way back to the Hall: …"), not a button. You
+  get somewhere by walking through the room's exits.
 - **GESTURE**: people here, then the gestures you may make to each. Free greetings to anyone;
   earned gestures only to connections (`hall_gestures()`, filter by `person.connected`).
 - **ME**: your description, your pack with **Put it on**, your open quests (`my_quests()`

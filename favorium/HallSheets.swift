@@ -669,9 +669,8 @@ struct HallSelfSheet: View {
 
 // MARK: - Listen
 
-/// Voices from each room: counts only, never names, and never anyone sneaking. A room
-/// is a door only if it's one of this room's exits, so we never offer a walk the server
-/// would refuse.
+/// Voices from each room: counts only, never names, and never anyone sneaking. Listening
+/// never moves you: to go somewhere you walk through the room's own exits.
 struct HallListenSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var store: HallStore
@@ -679,7 +678,6 @@ struct HallListenSheet: View {
     @State private var listen: RoomListen?
     @State private var error: String?
 
-    private var exits: [RoomExit] { store.room?.exits ?? [] }
     private var here: String? { listen?.here ?? store.room?.roomKey }
 
     var body: some View {
@@ -699,19 +697,13 @@ struct HallListenSheet: View {
                             ProgressView().tint(FavoriumTheme.accent)
                         }
                         ForEach(listen?.rooms ?? []) { row($0) }
-                        // The way back to the board, from wherever you are
-                        if let way = listen?.way_to_hall, exits.contains(where: { $0.key == "hall" }) {
-                            Button {
-                                dismiss()
-                                Task { await store.move(to: "hall", via: way) }
-                            } label: {
-                                Label(way, systemImage: "arrow.uturn.backward")
-                                    .font(.system(size: 14, weight: .semibold, design: .serif))
-                                    .foregroundColor(FavoriumTheme.accent)
-                                    .frame(minHeight: 44)
-                            }
-                            .buttonStyle(.plain)
-                            .padding(.top, 6)
+                        // A pointer back to the board, not a shortcut: you still walk there
+                        if let way = listen?.way_to_hall {
+                            Text("The way back to the Hall: \(way).")
+                                .font(.system(size: 14, design: .serif).italic())
+                                .foregroundColor(FavoriumTheme.ivoryDim)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.top, 6)
                         }
                     }
                     .hallPage()
@@ -728,14 +720,12 @@ struct HallListenSheet: View {
         .presentationDetents([.medium, .large])
     }
 
-    @ViewBuilder
     private func row(_ row: RoomListen.Row) -> some View {
-        let exit = exits.first { $0.key == row.key }
-        let content = HStack(alignment: .firstTextBaseline) {
+        HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.title)
                     .font(.system(size: 16, weight: .semibold, design: .serif))
-                    .foregroundColor(exit == nil ? FavoriumTheme.ivory : FavoriumTheme.accent)
+                    .foregroundColor(FavoriumTheme.ivory)
                 if row.key == here {
                     Text("You are here")
                         .font(FavoriumTheme.captionFont)
@@ -746,25 +736,9 @@ struct HallListenSheet: View {
             Text(voices(row.voices ?? 0))
                 .font(.system(size: 14, design: .serif).italic())
                 .foregroundColor(FavoriumTheme.ivoryDim)
-            if exit != nil {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(FavoriumTheme.accent)
-            }
         }
         .frame(minHeight: 44)
-        .contentShape(Rectangle())
-
-        if let exit {
-            Button {
-                dismiss()
-                Task { await store.move(to: exit.key, via: exit.label) }
-            } label: { content }
-            .buttonStyle(.plain)
-            .accessibilityHint("Walk there")
-        } else {
-            content
-        }
+        .accessibilityElement(children: .combine)
     }
 
     private func voices(_ count: Int) -> String {
