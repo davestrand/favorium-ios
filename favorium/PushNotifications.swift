@@ -20,7 +20,7 @@ final class PushManager: NSObject {
     static let shared = PushManager()
 
     /// Where a tapped push should take the user
-    enum Route: String { case favors, collection, profile }
+    enum Route: String { case favors, collection, hall, profile }
 
     private(set) var authorizationStatus: UNAuthorizationStatus = .notDetermined
     /// False until the first settings read, so UI doesn't mistake the default

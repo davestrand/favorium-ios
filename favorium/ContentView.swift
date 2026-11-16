@@ -13,11 +13,13 @@ struct ContentView: View {
     @State private var selectedTab: Tab = .collection
     @State private var notifications = FavorNotificationCenter()
     @State private var push = PushManager.shared
+    /// The Hall, kept here so its tab can show unread gestures
+    @State private var hall = HallStore()
     /// The title sheet is up, so a gem arrival waits for it (one sheet at a time)
     @State private var titleIsShowing = false
     @Environment(\.scenePhase) private var scenePhase
 
-    enum Tab { case collection, favors, profile }
+    enum Tab { case collection, favors, hall, profile }
 
     var body: some View {
         Group {
@@ -45,13 +47,18 @@ struct ContentView: View {
         .task(id: appVM.userId) {
             if let userId = appVM.userId {
                 // Foreground pushes refresh screens and show the in-app banner
-                push.onForegroundPush = { [notifications] title, body, favorId, kind in
+                push.onForegroundPush = { [notifications, hall] title, body, favorId, kind in
                     Task { await notifications.receivedForegroundPush(title: title, body: body, favorId: favorId, kind: kind) }
+                    // A gesture toward you waits in the Hall's log
+                    if kind == "action" { Task { await hall.refreshReceived() } }
                 }
                 await push.signedIn(userId: userId)
                 await notifications.start(userId: userId)
+                hall.signedIn(userId)
+                await hall.refreshReceived()
             } else {
                 await notifications.stop()
+                hall.reset()
             }
         }
         // A tapped push opens the matching tab
@@ -60,6 +67,7 @@ struct ContentView: View {
             switch route {
             case .collection: selectedTab = .collection
             case .favors:     selectedTab = .favors
+            case .hall:       selectedTab = .hall
             case .profile:    selectedTab = .profile
             }
             push.pendingRoute = nil
@@ -87,6 +95,7 @@ struct ContentView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 Task { await notifications.appBecameActive() }
+                if appVM.userId != nil { Task { await hall.refreshReceived() } }
             }
         }
         // A deleted account signs out instead of showing a half-empty profile
@@ -117,6 +126,14 @@ struct ContentView: View {
                 .badge(notifications.actionCount)
                 .tabItem {
                     Label("Favors", image: tabIcon(.favors, "tab_favors"))
+                }
+
+            HallView(store: hall)
+                .environment(appVM)
+                .tag(Tab.hall)
+                .badge(hall.unseen)
+                .tabItem {
+                    Label("Hall", systemImage: "building.columns")
                 }
 
             ProfileTabView()

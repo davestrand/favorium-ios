@@ -127,7 +127,7 @@ struct GoldButtonLabel: View {
 // MARK: - Profile section
 
 /// "Your character" on the Profile tab: a prompt to create one, or the description
-/// with links to the Quest Board and the wardrobe.
+/// with a link to the wardrobe. Quests live in the Hall tab.
 struct CharacterSection: View {
     @Environment(AppViewModel.self) private var appVM
     @Bindable var store: CharacterStore
@@ -142,7 +142,6 @@ struct CharacterSection: View {
             } else {
                 CharacterDescriptionText(lines: store.description)
                 VStack(spacing: 1) {
-                    link("Quest Board", icon: "scroll", detail: boardDetail) { QuestBoardView(store: store) }
                     link("Wardrobe", icon: "tshirt", detail: "\(store.inventory.count) earned") { WardrobeView(store: store) }
                     if !store.actionsReceived.isEmpty {
                         link("Received", icon: "hand.wave", detail: "\(store.actionsReceived.count)") {
@@ -164,11 +163,6 @@ struct CharacterSection: View {
         .sheet(isPresented: $showCreator, onDismiss: { Task { await store.load(userId: appVM.userId) } }) {
             CharacterCreatorView(store: store)
         }
-    }
-
-    private var boardDetail: String {
-        let open = store.board?.quests.filter(\.isPosted).count ?? 0
-        return open == 0 ? "" : "\(open) new"
     }
 
     private var createPrompt: some View {
@@ -220,6 +214,8 @@ struct CharacterCreatorView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppViewModel.self) private var appVM
     let store: CharacterStore
+    /// Called once a new character exists, before the sheet closes
+    var onCreated: (() -> Void)? = nil
 
     @State private var pronouns: Pronouns = .they
     @State private var raceKey: String?
@@ -372,7 +368,14 @@ struct CharacterCreatorView: View {
     @MainActor
     private func prepare() async {
         if store.catalog.isEmpty { await store.load(userId: appVM.userId) }
-        guard let character = store.character else { return }
+        guard let character = store.character else {
+            // A new character: every choice starts on its first option, so one tap is enough
+            if raceKey == nil { raceKey = store.entries("race").first?.key }
+            for kind in AppearanceKind.allCases where choices[kind] == nil {
+                choices[kind] = store.entries(kind.rawValue).first?.key
+            }
+            return
+        }
         pronouns = Pronouns(rawValue: character.pronouns ?? "") ?? .they
         for kind in AppearanceKind.allCases {
             choices[kind] = character.key(for: kind)
@@ -390,6 +393,7 @@ struct CharacterCreatorView: View {
                     try await SupabaseService.shared.updateCharacterAppearance(characterId: character.id, appearance: params)
                 } else if let raceKey {
                     try await SupabaseService.shared.createCharacter(raceKey: raceKey, appearance: params)
+                    onCreated?()
                 }
                 await store.load(userId: appVM.userId)
                 dismiss()
