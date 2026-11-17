@@ -82,17 +82,21 @@ Collected, each used for App Functionality, linked to the user, not used for tra
 - Identifiers: User ID
 Tracking: No.
 
-## Review notes
-Favorium only connects people who have paired in person, so we've prepared two demo accounts that are already paired, with gems and favors in progress.
+## Review notes (as submitted with 1.1, 2026-11-16)
+**Favorium — notes for review**
 
-Account A: [email] / [password]
-Account B: [email] / [password]
+Sign-in details are above. Email and password only; no in-app purchases, subscriptions or third-party sign-in.
 
-To try the main flow: sign in as A, open Favors, and offer B a favor. Sign in as B to accept it and mark it complete, then give A a gem. Press and hold any gem in Collection to step inside it.
+Favorium records favors between people who have paired in person. When someone confirms your help, they thank you with a gem. Gems have no monetary value and are never bought or sold.
 
-To try the Hall (new in 1.1): open the Hall tab. Without a character, tap Begin to make one, then tap In to step inside. Tap "the board" to read this week's quests, walk through an exit to another room, and tap a name in "Also here" to greet someone. Sign in as B on a second device to see each other in the same room.
+The demo account is an ordinary member with no admin rights. It is already paired with two people and loaded with demo data.
 
-Report and block are in the ••• menu on any favor card and in Connect. Account deletion is in Settings, behind the gear at the top right of the Profile tab. The demo data is mock data for review.
+1. Collection: tap a gem to see its journey. Press and hold a gem to step inside it.
+2. Favors: answer the favors waiting there (accept, confirm, give a gem), or tap Offer a favor. Connect, also on this tab, shows a one-time pairing code.
+3. Hall (new in 1.1): tap In to step inside, tap "the board" to read this week's quests, and tap an exit to walk to another room.
+4. Account deletion: Profile → gear (top right) → Delete Account. To test it, please create a new account from the sign-in screen, so the demo login keeps working for future reviews.
+
+All people, favors and gems in this account are demonstration data.
 
 ## Screenshots (6.9-inch iPhone, 5–6 shots)
 1. Collection of gems
@@ -102,3 +106,15 @@ Report and block are in the ••• menu on any favor card and in Connect. Acc
 5. "A gem arrived" celebration
 6. Profile with a helper title
 7. New in 1.1: the Hall, standing in a room with someone else there (consider making this shot 1 or 2 for the update)
+
+## Asset sizes App Store Connect asks for (checked 2026-11-16)
+| Slot | Accepted sizes (px) | Our file |
+|---|---|---|
+| iPhone 6.9" screenshots | 1320 × 2868 (portrait) | `app-store/1.1/0N-*.png` |
+| iPhone 6.1" / 6.3" screenshots | 1206 × 2622, 1179 × 2556 (portrait; landscape also accepted) | `app-store/1.1/6.3-inch/0N-*.png` |
+| iPhone 6.1" / 6.3" app previews (video) | 886 × 1920 or 1920 × 886 | none |
+| Header asset (1 image) | 5244 × 2950 or 3840 × 1646 | `app-store/1.1/header-5244x2950.png` |
+
+- Screenshots come from the "iPhone 18 Pro Max" simulator at 1320 × 2868, then `sips -z 2622 1206` for the 6.3" slot. A shot taken on a small phone (e.g. 960 × 2079) has to be scaled up and centre-cropped to fit.
+- The header is drawn by `app-store/make-header.swift` from the screenshots:
+  `swift make-header.swift <screenshot dir> <out.png> 5244 2950`. Its layout is 16:9, so it scales cleanly to 5244 × 2950 but would need re-laying out for 3840 × 1646.
