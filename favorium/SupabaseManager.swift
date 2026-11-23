@@ -8,7 +8,13 @@ final class SupabaseManager {
 
     private init() {
         let (url, key) = SupabaseManager.loadConfig()
-        self.client = SupabaseClient(supabaseURL: url, supabaseKey: key)
+        // The new initial-session behavior (supabase-swift #822). Nothing here listens for
+        // the initial session; sign-in state comes from `auth.session`, which refreshes first.
+        self.client = SupabaseClient(
+            supabaseURL: url,
+            supabaseKey: key,
+            options: SupabaseClientOptions(auth: .init(emitLocalSessionAsInitialSession: true))
+        )
     }
 
     static func loadConfig() -> (URL, String) {
