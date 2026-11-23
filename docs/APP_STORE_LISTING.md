@@ -1,7 +1,13 @@
 # App Store listing — Favorium
 
-v1 drafted 2026-10-23; updated for **v1.1 (the Hall)** on 2026-11-16. Character counts checked
-against App Store Connect limits.
+v1 drafted 2026-10-23; updated for **v1.1 (the Hall)** on 2026-11-16 and **v1.1.1** on
+2026-11-23. Character counts checked against App Store Connect limits.
+
+## What's New in Version 1.1.1 (220/4000)
+Small fixes and a fresh coat of paint.
+
+• The Hall no longer slips back to a loading spinner a few moments after you open it. The room stays put.
+• A cleaner app icon: the same rainbow gem, now on a solid background.
 
 ## What's New in Version 1.1 (840/4000)
 Welcome to the Hall.
