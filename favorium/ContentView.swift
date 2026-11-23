@@ -46,6 +46,9 @@ struct ContentView: View {
         // Live favor updates for whoever is signed in; stops on sign-out
         .task(id: appVM.userId) {
             if let userId = appVM.userId {
+                // First, before anything awaits: a first sign-in resets the store, and
+                // doing that later wiped a room the Hall tab had already loaded
+                hall.signedIn(userId)
                 // Foreground pushes refresh screens and show the in-app banner
                 push.onForegroundPush = { [notifications, hall] title, body, favorId, kind in
                     Task { await notifications.receivedForegroundPush(title: title, body: body, favorId: favorId, kind: kind) }
@@ -54,7 +57,6 @@ struct ContentView: View {
                 }
                 await push.signedIn(userId: userId)
                 await notifications.start(userId: userId)
-                hall.signedIn(userId)
                 await hall.refreshReceived()
             } else {
                 await notifications.stop()
